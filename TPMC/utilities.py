@@ -14,3 +14,9 @@ def reflect_spectular(c: np.array, wall: np.array):
     c_p = c - c_n # perpendicular component to wall
     c_prime = c_p - c_n # flip normal component
     return c_prime
+
+
+def check_in_cell(r: np.array, cell: np.array):
+    a = 1
+
+
