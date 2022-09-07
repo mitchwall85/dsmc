@@ -1,4 +1,3 @@
-from weakref import ref
 from utilities import reflect_spectular
 import numpy as np
 

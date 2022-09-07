@@ -13,5 +13,4 @@ def reflect_spectular(c: np.array, wall: np.array):
     c_n = np.dot(c,wall)*wall # normal component to wall
     c_p = c - c_n # perpendicular component to wall
     c_prime = c_p - c_n # flip normal component
-
     return c_prime
