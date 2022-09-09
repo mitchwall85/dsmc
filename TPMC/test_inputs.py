@@ -1,5 +1,4 @@
 import numpy as np
-from stl import mesh
 
 from particle import PARTICLE
 
@@ -21,3 +20,7 @@ print(c)
 file_name = r"../../2-lego-pieces-1.snapshot.3/Lego.stl"
 your_mesh = read_stl(file_name)
 a  = 1
+
+
+# TODO s
+# create cartesian cells
