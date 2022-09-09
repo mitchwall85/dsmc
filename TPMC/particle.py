@@ -31,3 +31,4 @@ class PARTICLE:
     # TODO s
     # function to add itself to tracked particles
     # function to remove itself from tracked particles
+    # function to record posn history

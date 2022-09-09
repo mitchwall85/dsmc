@@ -4,6 +4,7 @@ from stl import mesh
 
 def check_in_cell(r: np.array, cell: np.array):
     a = 1
+    # TODO move to particle class?
 
 
 def read_stl(file: str):
