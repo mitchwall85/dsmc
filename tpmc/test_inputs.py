@@ -10,7 +10,7 @@ wall = np.array([0, 0, 5])  # wall normal vector
 
 particle = PARTICLE(1, 1, c, np.array([1,1,1]), 0, )
 print(particle.vel)
-particle.reflect_spectular( wall)
+particle.reflect_spectular(wall)
 print(particle.vel)
 
 print(c)
