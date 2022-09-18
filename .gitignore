@@ -1,9 +1,4 @@
-hist_X.png
-hist_Y.png
-hist_Z.png
+*.png
 old/
 tpmc/__pycache__/
 RSS_velocity.png
-X_velocity.png
-Y_velocity.png
-Z_velocity.png
