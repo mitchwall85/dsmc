@@ -1,5 +1,6 @@
 import numpy as np
 from stl import mesh
+from particle import PARTICLE
 
 # Constants
 KB = 1.380649e-23 # [m^2*kg/s^2/K]
@@ -55,4 +56,3 @@ def gen_posn(diam: float):
     posn = np.array([r*np.cos(tht), r*np.sin(tht), 0])
 
     return posn
-
