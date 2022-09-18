@@ -33,7 +33,7 @@ if __name__ == "__main__":
      removed_particles = []
 
      # timestep params
-     t = np.linspace(0, 1, 1000)
+     t = np.linspace(0, 1, 2000)
      dt = t[1] - t[0] # TODO assume even timestep?
 
      # particle inflow
