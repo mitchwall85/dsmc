@@ -45,7 +45,7 @@ class PARTICLE:
             BOOL: if partice is within domain 
         """
         # TODO add in point and vector definition of plane to use dot product
-        if self.posn[2] >= exit_plane:
+        if self.posn[0] >= exit_plane:
             return True
 
     # TODO s
