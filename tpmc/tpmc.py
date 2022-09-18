@@ -63,9 +63,8 @@ if __name__ == "__main__":
      print(np.shape(removed_particles[2].posn_hist)[0])
 
      # plots
-     ax = plt.axes(projection='3d')
-     ax.scatter3D(removed_particles[2].posn_hist[:,0], removed_particles[2].posn_hist[:,1], removed_particles[2].posn_hist[:,2])
-     plt.savefig('stuff.png')
-     plt.show()
+     # ax = plt.axes(projection='3d')
+     # ax.scatter3D(removed_particles[2].posn_hist[:,0], removed_particles[2].posn_hist[:,1], removed_particles[2].posn_hist[:,2])
+     # plt.savefig('stuff.png')
+     # plt.show()
 
-     for tube_len in TUBE_L:
