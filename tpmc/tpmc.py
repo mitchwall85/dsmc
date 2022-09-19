@@ -59,6 +59,7 @@ if __name__ == "__main__":
                dx = particle[p].vel * dt
                particle[p].posn = particle[p].posn + dx
                particle[p].update_posn_hist(particle[p].posn)
+               # TODO can do a simple radial coordinate reflection to test stuff
 
                # TODO check if it collided with other particles, update posn and vel if collided
                if particle[p].exit_domain(TUBE_L):
