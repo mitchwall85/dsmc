@@ -12,8 +12,7 @@ def check_in_cell(r: np.array, cell: np.array):
 
 def read_stl(file: str):
 
-    your_mesh = mesh.Mesh.from_file(file)
-    a = 1
+    return mesh.Mesh.from_file(file)
 
 # TODO s
 # something to visualize geometry of grid and test object
@@ -39,6 +38,7 @@ def gen_velocity(blk: np.ndarray, T, m, k ):
     r1 = np.random.rand(3)
     r2 = np.random.rand(3)
     return  blk + np.sqrt(2*k*T/m)*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2)) # A.20 from boyd
+    # return  blk + np.array([np.sqrt(2*k*T/m)*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2)), 0, 0]) # A.20 from boyd
 
 
 def gen_posn(diam: float):
@@ -53,6 +53,6 @@ def gen_posn(diam: float):
 
     r = diam*np.sqrt(np.random.rand(1))
     tht = np.random.rand(1)*2*np.pi
-    posn = np.array([r*np.cos(tht), r*np.sin(tht), 0])
+    posn = np.concatenate([np.array([0]), r*np.cos(tht), r*np.sin(tht)])
 
     return posn
