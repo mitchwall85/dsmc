@@ -12,11 +12,13 @@ class PARTICLE:
         self.t = t_init
         self.posn_hist = init_posn
 
-    def reflect_specular(self, wall: np.array):
+    def reflect_specular(self, wall: np.array, dt: float, tube_d):
         """calculate the reflected velocity for a specular wall impact
         Args:
             c (np.array): incomming velocity
             wall (np.array): wall normal vector
+            dt (float): timestep length
+            tube_d (float): diameter of tube
         """
         # ensure wall vector is a unit vector
         wall = wall/np.linalg.norm(wall)
@@ -25,6 +27,9 @@ class PARTICLE:
         c_p = self.vel - c_n # perpendicular component to wall
         self.vel = c_p - c_n # flip normal component
         dm = self.mass*(self.vel - v0) # change in momentum from wall collission
+
+        
+
         return dm
 
     def update_posn_hist(self, r: np.array):
