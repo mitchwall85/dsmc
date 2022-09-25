@@ -27,8 +27,8 @@ class PARTICLE:
         c_p = self.vel - c_n # perpendicular component to wall
         self.vel = c_p - c_n # flip normal component
         dm = self.mass*(self.vel - v0) # change in momentum from wall collission
+        # stuff
 
-        
 
         return dm
 
