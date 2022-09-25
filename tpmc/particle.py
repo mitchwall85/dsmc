@@ -12,19 +12,24 @@ class PARTICLE:
         self.t = t_init
         self.posn_hist = init_posn
 
-    def reflect_spectular(self, wall: np.array):
+    def reflect_specular(self, wall: np.array, dt: float, tube_d):
         """calculate the reflected velocity for a specular wall impact
         Args:
             c (np.array): incomming velocity
             wall (np.array): wall normal vector
+            dt (float): timestep length
+            tube_d (float): diameter of tube
         """
         # ensure wall vector is a unit vector
         wall = wall/np.linalg.norm(wall)
         v0 = self.vel
-        c_n = np.dot(self.vel,wall) # normal component to wall
+        c_n = np.dot(self.vel,wall)*wall # normal component to wall
         c_p = self.vel - c_n # perpendicular component to wall
         self.vel = c_p - c_n # flip normal component
         dm = self.mass*(self.vel - v0) # change in momentum from wall collission
+
+        
+
         return dm
 
     def update_posn_hist(self, r: np.array):
@@ -45,7 +50,7 @@ class PARTICLE:
             BOOL: if partice is within domain 
         """
         # TODO add in point and vector definition of plane to use dot product
-        if self.posn[2] >= exit_plane:
+        if self.posn[0] >= exit_plane:
             return True
 
     # TODO s
