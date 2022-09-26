@@ -10,7 +10,7 @@ class PARTICLE:
         self.posn = init_posn
         self.vel = init_vel
         self.t = t_init
-        self.posn_hist = init_posn
+        self.posn_hist =  np.vstack([init_posn,init_posn]) # TODO this isnt exactly right but starting from zero isnt right either.
 
     def reflect_specular(self, wall: np.array, dt: float, tube_d):
         """calculate the reflected velocity for a specular wall impact
@@ -37,7 +37,7 @@ class PARTICLE:
         Args:
             r (np.array): position vector
         """
-        self.posn_hist = np.vstack([self.posn_hist,r])
+        self.posn_hist = np.vstack([self.posn_hist[-1],r])
 
     def update_posn(self, dx):
         self.posn = self.posn + dx
