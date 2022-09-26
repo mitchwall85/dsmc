@@ -7,19 +7,24 @@ class PARTICLE:
         """inital properties of the particle"""
         self.mass = mass
         self.r = r # radius
-        self.posn = init_posn
         self.vel = init_vel
         self.t = t_init
-        self.posn_hist =  np.vstack([init_posn,init_posn]) # TODO this isnt exactly right but starting from zero isnt right either.
+        # self.posn_hist =  np.vstack([np.array([0,0,0]),init_posn]) # zeros isnt perfect but it gets overwritten
+        self.posn_hist =  init_posn # zeros isnt perfect but it gets overwritten
 
-    def reflect_specular(self, wall: np.array, dt: float, tube_d):
+    def reflect_specular(self, wall: np.array, dt: float, tube_d, cell_n_i, cell_n_f):
         """calculate the reflected velocity for a specular wall impact
         Args:
             c (np.array): incomming velocity
-            wall (np.array): wall normal vector
+            wall (np.array): wall normal vector, inwards facing, # TODO I think this needs to be inward facing...
             dt (float): timestep length
             tube_d (float): diameter of tube
         """
+
+        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+        intersect = self.posn_hist[-2] + pct_vect*dt*self.vel # TODO check 
+
+
         # ensure wall vector is a unit vector
         wall = wall/np.linalg.norm(wall)
         v0 = self.vel
@@ -27,8 +32,11 @@ class PARTICLE:
         c_p = self.vel - c_n # perpendicular component to wall
         self.vel = c_p - c_n # flip normal component
         dm = self.mass*(self.vel - v0) # change in momentum from wall collission
-        # stuff
 
+        # collision location
+        self.posn_hist[-1] = intersect
+        # post - collision location
+        self.update_posn_hist(intersect + dt*(1 - pct_vect)*self.vel) # update position with fraction of remaining timestep
 
         return dm
 
@@ -37,10 +45,7 @@ class PARTICLE:
         Args:
             r (np.array): position vector
         """
-        self.posn_hist = np.vstack([self.posn_hist[-1],r])
-
-    def update_posn(self, dx):
-        self.posn = self.posn + dx
+        self.posn_hist = np.vstack([self.posn_hist,r])
 
     def exit_domain(self, exit_plane: float):
         """determine if particle has left domain
@@ -50,7 +55,7 @@ class PARTICLE:
             BOOL: if partice is within domain 
         """
         # TODO add in point and vector definition of plane to use dot product
-        if self.posn[0] >= exit_plane:
+        if self.posn_hist[-1][0] >= exit_plane:
             return True
 
     # TODO s

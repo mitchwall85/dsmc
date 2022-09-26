@@ -17,7 +17,7 @@ def read_stl(file: str):
 # TODO s
 # something to visualize geometry of grid and test object
 
-def gen_velocity(blk: np.ndarray, T, m, k ):
+def gen_velocity(blk: np.ndarray, c_m, s_n ):
     """generate a boltzmann distribution of velocities
 
     Args:
@@ -27,7 +27,7 @@ def gen_velocity(blk: np.ndarray, T, m, k ):
         k (np.array, optional): boltzmann const.
 
     Returns:
-        c: velocity vector 
+        c: velocity vector [surface normal, tangential 1, tangential 2]
     """
 
     # blk = [0, 300, 1000] # bulk velocities to test
@@ -35,8 +35,21 @@ def gen_velocity(blk: np.ndarray, T, m, k ):
     # Ttr = 300 # translational temp
     # m = 28.0134/1000/6.02e23 # mass of a N2 molecule
     
-    r1 = np.random.rand(3)
-    r2 = np.random.rand(3)
+    # tangential components
+    r1 = np.random.rand(2)
+    r2 = np.random.rand(2)
+    v_2_3 = c_m*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2))
+
+    # normal component
+    pdf_max = 0.5*(np.sqrt(s_n**2 + 2) - s_n)
+    h = np.sqrt(s_n**2 + 2)
+    k_cap = 2/(s_n + h)*np.exp(0.5 + 0.5*s_n*(s_n - h))
+    y = cx/c_m # cm = 1/beta? p 317 boyd
+    pdf_norm = k_cap*(y + s_n)*np.exp(-y**2)
+
+    y = -3 + 6*np.random.rand(1)
+
+
     return  blk + np.sqrt(2*k*T/m)*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2)) # A.20 from boyd
 
 
