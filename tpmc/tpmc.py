@@ -32,7 +32,9 @@ SIGMA_T = np.pi/4*MOLECULE_D**2
 
 NUMBER_DENSITY = 1/KN/SIGMA_T/TUBE_D
 
-GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm.stl"
+WALL_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm.stl"
+INLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_inlet.stl"
+OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet.stl"
 
 # Overrides for now
 FREESTREAM_TEMP = 1 # K
@@ -43,9 +45,9 @@ if __name__ == "__main__":
      """
 
      # Mesh Info
-     # Wall grid
-     file_name = GRID_NAME
-     your_mesh = read_stl(file_name)
+     wall_grid = read_stl(WALL_GRID_NAME)
+     inlet_grid = read_stl(INLET_GRID_NAME)
+     outlet_grid = read_stl(OUTLET_GRID_NAME)
 
      surf_normal = np.array([1, 0, 0])
 
@@ -79,7 +81,7 @@ if __name__ == "__main__":
           # generate particles for each timestep
           for n in np.arange(0,particles_per_timestep):
                # v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
-               v = np.array([100, 60*np.cos(np.pi/8), 60*np.sin(np.pi/8)])
+               v = np.array([100, 60*np.cos(np.pi/9), 60*np.sin(np.pi/9)])
                # r = gen_posn(TUBE_D) # TODO this looks kinda odd now, make this just on the inlet face
                r = np.array([0,0,0])
                if np.sqrt(r[1]**2 + r[2]**2) > TUBE_D/2: # TODO what was this for?
@@ -96,11 +98,11 @@ if __name__ == "__main__":
 
                # print(f"particle no: {p}")
                # detect collisions by looping over cells
-               for c in np.arange(np.shape(your_mesh.centroids)[0]):
+               for c in np.arange(np.shape(wall_grid.centroids)[0]):
                     # create element basis centered on centroid
-                    cell_n = your_mesh.normals[c]/np.linalg.norm(your_mesh.normals[c])
+                    cell_n = wall_grid.normals[c]/np.linalg.norm(wall_grid.normals[c])
                     # transform positions to new basis
-                    cent = your_mesh.centroids[c]
+                    cent = wall_grid.centroids[c]
                     cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2]) # TODO not all these operations needed if just x coord, most of this can be deleted
                     cell_n_f = cell_n.dot(cent - particle[p].posn_hist[-1])
                     if np.sign(cell_n_f) != np.sign(cell_n_i):
