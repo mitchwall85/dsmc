@@ -9,8 +9,7 @@ class PARTICLE:
         self.r = r # radius
         self.vel = init_vel
         self.t = t_init
-        # self.posn_hist =  np.vstack([np.array([0,0,0]),init_posn]) # zeros isnt perfect but it gets overwritten
-        self.posn_hist =  init_posn # zeros isnt perfect but it gets overwritten
+        self.posn_hist =  np.array([init_posn])
 
     def reflect_specular(self, wall: np.array, dt: float, tube_d, cell_n_i, cell_n_f):
         """calculate the reflected velocity for a specular wall impact

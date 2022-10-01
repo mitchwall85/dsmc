@@ -1,6 +1,7 @@
 import numpy as np
 from stl import mesh
 from particle import PARTICLE
+import matplotlib.pyplot as plt
 
 # Constants
 KB = 1.380649e-23 # [m^2*kg/s^2/K]
@@ -17,7 +18,7 @@ def read_stl(file: str):
 # TODO s
 # something to visualize geometry of grid and test object
 
-def gen_velocity(blk: np.ndarray, c_m, s_n ):
+def gen_velocity(blk: np.ndarray, c_m, s_n ): # TODO How does this even work anymore?
     """generate a boltzmann distribution of velocities
 
     Args:
@@ -53,18 +54,46 @@ def gen_velocity(blk: np.ndarray, c_m, s_n ):
     return  blk + np.sqrt(2*k*T/m)*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2)) # A.20 from boyd
 
 
-def gen_posn(diam: float):
-    """generate position on circular face, assumes z=0 at inlet face
+def gen_posn(grid): # whats the type hint here?
+    """ generate random point on inlet surface
 
     Args:
-        diam (float): diameter of inlet face
+        grid (stl.mesh.Mesh): Requires STL inlet surface grid. Must be flat with x normal
 
     Returns:
-        posn: xyz coords
+        list: [y, z] point on inlet
     """
+    # only works on flat surface with X normal
+    dy = grid.max_[1] - grid.min_[1]
+    dz = grid.max_[2] - grid.min_[2]
+    try_again = True
+    while try_again:
 
-    r = diam/2*np.sqrt(np.random.rand(1))
-    tht = np.random.rand(1)*2*np.pi
-    posn = np.concatenate([np.array([0]), r*np.cos(tht), r*np.sin(tht)])
+        y = dy*np.random.rand(1) - grid.max_[1] # does this require a center at 0,0?
+        z = dz*np.random.rand(1) - grid.max_[2]
+        r = np.array([0, y[0], z[0]])
 
-    return posn
+
+        for c in np.arange(np.shape(grid.centroids)[0]): # TODO generalize to squares?
+            v1 = grid.points[c][0:3] - grid.points[c][3:6]
+            v1_1 = np.cross(np.array([1,0,0]), v1)
+            s1 = v1_1.dot(r - grid.points[c][0:3])
+
+            v2 = grid.points[c][3:6] - grid.points[c][-3:]
+            v2_1 = np.cross(np.array([1,0,0]), v2)
+            s2 = v2_1.dot(r - grid.points[c][3:6])
+
+            v3 = grid.points[c][-3:] - grid.points[c][0:3]
+            v3_1 = np.cross(np.array([1,0,0]), v3)
+            s3 = v3_1.dot(r - grid.points[c][-3:])
+
+            if s1 < 0 and s2 < 0 and s3 < 0:
+                try_again = False
+                break
+            else:
+                try_again = True
+
+    return np.array([0, y[0], z[0]])
+
+
+    

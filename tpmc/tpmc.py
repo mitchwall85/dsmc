@@ -1,6 +1,7 @@
 from curses import pair_content
 from distutils.ccompiler import gen_preprocess_options
 from lib2to3.pgen2.token import NUMBER
+from xml.etree.ElementTree import QName
 from pint import UnitRegistry
 import numpy as np
 from particle import PARTICLE
@@ -32,9 +33,9 @@ SIGMA_T = np.pi/4*MOLECULE_D**2
 
 NUMBER_DENSITY = 1/KN/SIGMA_T/TUBE_D
 
-WALL_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm.stl"
-INLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_inlet.stl"
-OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet.stl"
+WALL_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_v2.stl"
+INLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
+OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
 
 # Overrides for now
 FREESTREAM_TEMP = 1 # K
@@ -64,7 +65,7 @@ if __name__ == "__main__":
 
      # time vector
      dt = 1e-5 # TODO non-even timesteps?
-     t_steps = 100
+     t_steps = 1000
      t = np.linspace(0, t_steps*dt, t_steps)
 
      # particle inflow
@@ -76,19 +77,19 @@ if __name__ == "__main__":
 
      print(particles_per_timestep) # make sure this is not to small or too big
      # loop over time
-     particles_per_timestep = 1 # TODO eventually replace this with real inflows
+     particles_per_timestep = 5 # TODO eventually replace this with real inflows
+
+     for n in np.arange(0,particles_per_timestep):
+          # v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
+          v = np.array([100, 60*np.cos(np.pi/9), 60*np.sin(np.pi/9)])
+          r = gen_posn(inlet_grid)
+          # r = np.array([0,0,0])
+          print(r)
+          particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=0)) # fix t_init
+
      for i in np.arange(1,t.size):
           # generate particles for each timestep
-          for n in np.arange(0,particles_per_timestep):
-               # v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
-               v = np.array([100, 60*np.cos(np.pi/9), 60*np.sin(np.pi/9)])
-               # r = gen_posn(TUBE_D) # TODO this looks kinda odd now, make this just on the inlet face
-               r = np.array([0,0,0])
-               if np.sqrt(r[1]**2 + r[2]**2) > TUBE_D/2: # TODO what was this for?
-                    a = 1
-               if v[0] < 0: # skip iteration if the particle is not headed to the domain
-                    continue
-               particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=i))
+          # TODO add loop for generation back in later 
 
           print(t[i])
           p = 0
@@ -96,27 +97,44 @@ if __name__ == "__main__":
                dx = particle[p].vel * dt
                particle[p].update_posn_hist(particle[p].posn_hist[-1] + dx)
 
-               # print(f"particle no: {p}")
-               # detect collisions by looping over cells
+               # detect wall collisions by looping over cells
                for c in np.arange(np.shape(wall_grid.centroids)[0]):
                     # create element basis centered on centroid
                     cell_n = wall_grid.normals[c]/np.linalg.norm(wall_grid.normals[c])
                     # transform positions to new basis
                     cent = wall_grid.centroids[c]
-                    cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2]) # TODO not all these operations needed if just x coord, most of this can be deleted
+                    cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2])
                     cell_n_f = cell_n.dot(cent - particle[p].posn_hist[-1])
                     if np.sign(cell_n_f) != np.sign(cell_n_i):
-                         # this only checks if it crossed any cell, not which specific cell
-                         # print(np.linalg.norm(particle[p].posn[1:3])) # sanity check
-                         particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
-                         break
+                         pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+                         intersect = particle[p].posn_hist[-2] + pct_vect*dt*particle[p].vel # TODO check 
+
+                         # check all this nastyness TODO move to a fcn
+                         v1 = wall_grid.points[c][0:3] - wall_grid.points[c][3:6]
+                         v1_1 = np.cross(cell_n, v1)
+                         s1 = v1_1.dot(intersect - wall_grid.points[c][0:3])
+
+                         v2 = wall_grid.points[c][3:6] - wall_grid.points[c][-3:]
+                         v2_1 = np.cross(cell_n, v2)
+                         s2 = v2_1.dot(intersect - wall_grid.points[c][3:6])
+
+                         v3 = wall_grid.points[c][-3:] - wall_grid.points[c][0:3]
+                         v3_1 = np.cross(cell_n, v3)
+                         s3 = v3_1.dot(intersect - wall_grid.points[c][-3:])
+
+                         if s1 < 0 and s2 < 0 and s3 < 0:
+                              particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
                
+              
                # TODO check if it collided with other particles, update posn and vel if collided
                if particle[p].exit_domain(TUBE_L):
                     removed_particles.append(particle[p])
                     particle.remove(particle[p])
                else:
                     p += 1
+
+          if removed_particles.__len__() > 10:
+               break
 
 
      # inspect particles that have left the domain
@@ -126,6 +144,13 @@ if __name__ == "__main__":
           ax.plot(p.posn_hist[:,0], p.posn_hist[:,1], p.posn_hist[:,2], '-o')
           plt.xlabel('X')
           plt.ylabel('Y')
+
+     # add grid to plot    
+     pts_wall = wall_grid.points.reshape((wall_grid.__len__()*3, 3))
+     pts_inlet = inlet_grid.points.reshape((inlet_grid.__len__()*3, 3))
+     # ax.scatter(pts_wall[:,0], pts_wall[:,1], pts_wall[:,2], c='m')
+     # ax.scatter(pts_inlet[:,0], pts_inlet[:,1], pts_inlet[:,2], c='red')
+     # ax.axis('equal')
 
      plt.show()
      plt.savefig('stuff.png')
