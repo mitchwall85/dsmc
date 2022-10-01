@@ -8,7 +8,7 @@ from particle import PARTICLE
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from stl import mesh
-from utilities import gen_velocity, gen_posn, KB, read_stl
+from utilities import gen_velocity, gen_posn, KB, read_stl, in_element
 from scipy.spatial.transform import Rotation as R
 from scipy import special
 
@@ -30,11 +30,10 @@ M = 28.0134/1000/6.02e23 # mass of a N2 molecule
 MOLECULE_D = 364e-12 # [m]
 SIGMA_T = np.pi/4*MOLECULE_D**2
 
-
 NUMBER_DENSITY = 1/KN/SIGMA_T/TUBE_D
 
-WALL_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_v2.stl"
-INLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
+WALL_GRID_NAME   = r"../../geometry/cylinder_d2mm_l20mm_v2.stl"
+INLET_GRID_NAME  = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
 OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
 
 # Overrides for now
@@ -106,23 +105,11 @@ if __name__ == "__main__":
                     cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2])
                     cell_n_f = cell_n.dot(cent - particle[p].posn_hist[-1])
                     if np.sign(cell_n_f) != np.sign(cell_n_i):
+
                          pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-                         intersect = particle[p].posn_hist[-2] + pct_vect*dt*particle[p].vel # TODO check 
+                         intersect = particle[p].posn_hist[-2] + pct_vect*dt*particle[p].vel # TODO check
 
-                         # check all this nastyness TODO move to a fcn
-                         v1 = wall_grid.points[c][0:3] - wall_grid.points[c][3:6]
-                         v1_1 = np.cross(cell_n, v1)
-                         s1 = v1_1.dot(intersect - wall_grid.points[c][0:3])
-
-                         v2 = wall_grid.points[c][3:6] - wall_grid.points[c][-3:]
-                         v2_1 = np.cross(cell_n, v2)
-                         s2 = v2_1.dot(intersect - wall_grid.points[c][3:6])
-
-                         v3 = wall_grid.points[c][-3:] - wall_grid.points[c][0:3]
-                         v3_1 = np.cross(cell_n, v3)
-                         s3 = v3_1.dot(intersect - wall_grid.points[c][-3:])
-
-                         if s1 < 0 and s2 < 0 and s3 < 0:
+                         if in_element(wall_grid.points[c], cell_n, intersect):
                               particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
                
               

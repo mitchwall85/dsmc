@@ -96,4 +96,23 @@ def gen_posn(grid): # whats the type hint here?
     return np.array([0, y[0], z[0]])
 
 
+def in_element(cell_points, normal, intersect):
+
+    num_p = int(cell_points.__len__()/3)
+    cell_points = cell_points.reshape(3,num_p)
+
+    in_elem = True
+    for p in np.arange(0,num_p):
+        v1 = cell_points[0] - cell_points[1]
+        v2 = np.cross(normal, v1)
+        s1 = v2.dot(intersect - cell_points[0])
+
+        if s1 > 0:
+            in_elem = False 
+            break
+        else:
+            np.roll(cell_points,3)
+
+    return in_elem
+    
     
