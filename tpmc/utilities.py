@@ -104,7 +104,7 @@ def in_element(cell_points, normal, intersect):
     in_elem = True
     for p in np.arange(0,num_p):
         v1 = cell_points[0] - cell_points[1]
-        v2 = np.cross(normal, v1)
+        v2 = np.cross(normal, v1) # IS THIS AN OUTWARD FACING NORMAL?
         s1 = v2.dot(intersect - cell_points[0])
 
         if s1 > 0:
