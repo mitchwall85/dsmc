@@ -42,16 +42,21 @@ def gen_velocity(blk: np.ndarray, c_m, s_n ): # TODO How does this even work any
     v_2_3 = c_m*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2))
 
     # normal component
-    pdf_max = 0.5*(np.sqrt(s_n**2 + 2) - s_n)
-    h = np.sqrt(s_n**2 + 2)
-    k_cap = 2/(s_n + h)*np.exp(0.5 + 0.5*s_n*(s_n - h))
-    y = cx/c_m # cm = 1/beta? p 317 boyd
-    pdf_norm = k_cap*(y + s_n)*np.exp(-y**2)
+    pdf_max = 0.5*(np.sqrt(s_n**2 + 2) - s_n) # A.32
+    h = np.sqrt(s_n**2 + 2) # A.34
+    k_cap = 2/(s_n + h)*np.exp(0.5 + 0.5*s_n*(s_n - h)) # A.34
+    # while loop until staisfactory value is found
+    value = False
+    while value == False:
+        y = -3 + 6*np.random.rand(1) # random number: -3 < y < 3
+        r2 = np.random.rand(1) # step 2 of procedure on p 319
+        pdf_norm = k_cap*(y + s_n)*np.exp(-y**2) # A.33
+        if r2 < pdf_norm:
+            v_1 = y*c_m # step 3 
+            value = True
 
-    y = -3 + 6*np.random.rand(1)
 
-
-    return  blk + np.sqrt(2*k*T/m)*np.sin(2*np.pi*r1)*np.sqrt(-np.log(r2)) # A.20 from boyd
+    return  np.array([v_1[0], v_2_3[0], v_2_3[1]]) + blk # return velcity vector with bulk added on
 
 
 def gen_posn(grid): # whats the type hint here?
@@ -74,7 +79,7 @@ def gen_posn(grid): # whats the type hint here?
         r = np.array([0, y[0], z[0]])
 
 
-        for c in np.arange(np.shape(grid.centroids)[0]): # TODO generalize to squares?
+        for c in np.arange(np.shape(grid.centroids)[0]): # replace with in_element()
             v1 = grid.points[c][0:3] - grid.points[c][3:6]
             v1_1 = np.cross(np.array([1,0,0]), v1)
             s1 = v1_1.dot(r - grid.points[c][0:3])
@@ -111,7 +116,7 @@ def in_element(cell_points, normal, intersect):
             in_elem = False 
             break
         else:
-            np.roll(cell_points,3)
+            cell_points = np.roll(cell_points,3)
 
     return in_elem
     

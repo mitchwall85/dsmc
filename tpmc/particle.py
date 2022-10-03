@@ -10,6 +10,7 @@ class PARTICLE:
         self.vel = init_vel
         self.t = t_init
         self.posn_hist =  np.array([init_posn])
+        
 
     def reflect_specular(self, wall: np.array, dt: float, tube_d, cell_n_i, cell_n_f):
         """calculate the reflected velocity for a specular wall impact

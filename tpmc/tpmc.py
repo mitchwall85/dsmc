@@ -11,6 +11,7 @@ from stl import mesh
 from utilities import gen_velocity, gen_posn, KB, read_stl, in_element
 from scipy.spatial.transform import Rotation as R
 from scipy import special
+import pickle
 
 
 ureg = UnitRegistry()
@@ -22,7 +23,7 @@ TUBE_L = 0.02 # add other lengths later
 
 ALPHA_T = 0
 
-FREESTREAM_VEL = np.array([100, 0, 0]) # m/s, x velocity
+FREESTREAM_VEL = np.array([1000, 0, 0]) # m/s, x velocity
 FREESTREAM_TEMP = 300 # k
 KN = 100
 
@@ -32,13 +33,9 @@ SIGMA_T = np.pi/4*MOLECULE_D**2
 
 NUMBER_DENSITY = 1/KN/SIGMA_T/TUBE_D
 
-WALL_GRID_NAME   = r"../../geometry/cylinder_d2mm_l20mm_v2.stl"
+WALL_GRID_NAME   = r"../../geometry/cylinder_d2mm_l20mm_v1.stl"
 INLET_GRID_NAME  = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
 OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
-
-# Overrides for now
-FREESTREAM_TEMP = 1 # K
-NUMBER_DENSITY = 1e2 # idk what to set rn, particles/m^3
 
 if __name__ == "__main__":
      """ loop through time for TPMC simulation
@@ -54,44 +51,40 @@ if __name__ == "__main__":
 
      # number flux
      c_m = np.sqrt(2*KB*FREESTREAM_TEMP/M)
-     s_n = np.dot(FREESTREAM_VEL, surf_normal)/c_m
-     f_n = NUMBER_DENSITY*c_m/2/np.sqrt(np.pi)*(np.exp(-s_n**2) + np.sqrt(np.pi)*s_n*(1 + special.erf(s_n)))
+     v_bar = np.dot(FREESTREAM_VEL, surf_normal)
+     s_n = (np.dot(v_bar, surf_normal)/c_m)[0]# A.26 TODO why do I need to select only 1 component?
+     f_n = NUMBER_DENSITY*c_m/2/np.sqrt(np.pi)*(np.exp(-s_n**2) + np.sqrt(np.pi)*s_n*(1 + special.erf(s_n))) # A.27
+
+     # grid info
+     inlet_a = 0
+     for c in inlet_grid.areas:
+          inlet_a = inlet_a = c
+
+     # time step info
+     dt = 0.5e-6 # TODO non-even timesteps? automatic timestep generation?
+     # particle inflow
+     real_particles_per_timestep = np.ceil(f_n*dt*inlet_a) # A.28
+     particles_per_timestep = 10 # choose a weighting factor such that only n particles are simulated per timestep
+     wp = real_particles_per_timestep/particles_per_timestep # weighting factor
 
      particle = []
      removed_particles = []
+     removed_particles_time = [[],[]] # 2d list for plotting removed particles
 
-
-
-     # time vector
-     dt = 1e-5 # TODO non-even timesteps?
-     t_steps = 1000
-     t = np.linspace(0, t_steps*dt, t_steps)
-
-     # particle inflow
-     a_tube = np.pi/4*TUBE_D**2
-     inflow_particles_flux = NUMBER_DENSITY*np.linalg.norm(FREESTREAM_VEL)
-     particles_per_timestep = np.ceil(inflow_particles_flux*dt*a_tube)
-     if particles_per_timestep < 100:
-          print("Inflow density is < 100, maybe fix that!")
-
-     print(particles_per_timestep) # make sure this is not to small or too big
-     # loop over time
-     particles_per_timestep = 5 # TODO eventually replace this with real inflows
-
-     for n in np.arange(0,particles_per_timestep):
-          # v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
-          v = np.array([100, 60*np.cos(np.pi/9), 60*np.sin(np.pi/9)])
-          r = gen_posn(inlet_grid)
-          # r = np.array([0,0,0])
-          print(r)
-          particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=0)) # fix t_init
-
-     for i in np.arange(1,t.size):
+     i = 1
+     removed = 0
+     while i < 100:
           # generate particles for each timestep
-          # TODO add loop for generation back in later 
+          for n in np.arange(0,particles_per_timestep):
+               v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
+               # v = np.array([100, 30*np.cos(np.pi/9), 30*np.sin(np.pi/9)])
+               r = gen_posn(inlet_grid)
+               # print(r)
+               particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=0)) # fix t_init
 
-          print(t[i])
+          print(i*dt)
           p = 0
+          removed = 0
           while p < len(particle):
                dx = particle[p].vel * dt
                particle[p].update_posn_hist(particle[p].posn_hist[-1] + dx)
@@ -113,33 +106,34 @@ if __name__ == "__main__":
                               particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
                
               
-               # TODO check if it collided with other particles, update posn and vel if collided
                if particle[p].exit_domain(TUBE_L):
                     removed_particles.append(particle[p])
                     particle.remove(particle[p])
+                    removed+=1
                else:
                     p += 1
 
-          if removed_particles.__len__() > 10:
-               break
+          print(f'Particles removed: {removed}')
 
+          # find now many particles leave the domain per timestep
+          removed_particles_time[0].append(i*dt)
+          removed_particles_time[1].append(removed)
 
-     # inspect particles that have left the domain
-     fig = plt.figure()
-     ax = fig.add_subplot(111, projection='3d')
-     for p in removed_particles:
-          ax.plot(p.posn_hist[:,0], p.posn_hist[:,1], p.posn_hist[:,2], '-o')
-          plt.xlabel('X')
-          plt.ylabel('Y')
+          i+=1
 
-     # add grid to plot    
-     pts_wall = wall_grid.points.reshape((wall_grid.__len__()*3, 3))
-     pts_inlet = inlet_grid.points.reshape((inlet_grid.__len__()*3, 3))
-     # ax.scatter(pts_wall[:,0], pts_wall[:,1], pts_wall[:,2], c='m')
-     # ax.scatter(pts_inlet[:,0], pts_inlet[:,1], pts_inlet[:,2], c='red')
-     # ax.axis('equal')
+     with open('particle_1e6_400 .pkl', 'wb') as f: # write out current field of particles
+          pickle.dump(particle, f)
+
+     average_window = 30
+     removed_particles_avg = [[],[]]
+     for w in np.arange(average_window,removed_particles_time[0].__len__()):
+          removed_particles_avg[0].append(removed_particles_time[0][w]) 
+          removed_particles_avg[1].append(np.mean(removed_particles_time[1][w-average_window:w])) 
+
+     plt.plot(removed_particles_avg[0], removed_particles_avg[1])
+     
 
      plt.show()
-     plt.savefig('stuff.png')
+     plt.savefig('removed_particles.png')
      
 
