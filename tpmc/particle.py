@@ -45,7 +45,7 @@ class PARTICLE:
         Args:
             r (np.array): position vector
         """
-        self.posn_hist = np.vstack([self.posn_hist,r])
+        self.posn_hist = np.vstack([self.posn_hist[-1],r])
 
     def exit_domain(self, exit_plane: float):
         """determine if particle has left domain

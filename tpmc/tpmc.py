@@ -47,6 +47,7 @@ if __name__ == "__main__":
      outlet_grid = read_stl(OUTLET_GRID_NAME)
 
      surf_normal = np.array([1, 0, 0])
+     no_wall_elems = np.shape(wall_grid.centroids)[0]
 
 
      # number flux
@@ -62,18 +63,20 @@ if __name__ == "__main__":
 
      # time step info
      dt = 0.5e-6 # TODO non-even timesteps? automatic timestep generation?
+     t_steps = 200
      # particle inflow
      real_particles_per_timestep = np.ceil(f_n*dt*inlet_a) # A.28
-     particles_per_timestep = 10 # choose a weighting factor such that only n particles are simulated per timestep
+     particles_per_timestep = 100 # choose a weighting factor such that only n particles are simulated per timestep
      wp = real_particles_per_timestep/particles_per_timestep # weighting factor
 
      particle = []
      removed_particles = []
      removed_particles_time = [[],[]] # 2d list for plotting removed particles
+     pres_time = [] # pressure matrix over all timesteps
 
      i = 1
      removed = 0
-     while i < 100:
+     while i < t_steps:
           # generate particles for each timestep
           for n in np.arange(0,particles_per_timestep):
                v = gen_velocity(FREESTREAM_VEL, c_m, s_n) # TODO formulate for general inlet plane orientation
@@ -82,9 +85,11 @@ if __name__ == "__main__":
                # print(r)
                particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=0)) # fix t_init
 
-          print(i*dt)
+          print(f"Total Time: {i*dt}")
+          print(f"Time Steps: {100*(i)/t_steps} %")
           p = 0
           removed = 0
+          pres = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
           while p < len(particle):
                dx = particle[p].vel * dt
                particle[p].update_posn_hist(particle[p].posn_hist[-1] + dx)
@@ -103,7 +108,9 @@ if __name__ == "__main__":
                          intersect = particle[p].posn_hist[-2] + pct_vect*dt*particle[p].vel # TODO check
 
                          if in_element(wall_grid.points[c], cell_n, intersect):
-                              particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
+                              dm = particle[p].reflect_specular(cell_n, dt, TUBE_D, cell_n_i, cell_n_f)
+                              pres_scalar = np.linalg.norm(dm/dt/wall_grid.areas[c])
+                              pres[c].append(pres_scalar) # pressure contribution from reflection
                
               
                if particle[p].exit_domain(TUBE_L):
@@ -112,6 +119,7 @@ if __name__ == "__main__":
                     removed+=1
                else:
                     p += 1
+          pres_time.append(pres) # tack on new pressure matrix for new time step
 
           print(f'Particles removed: {removed}')
 
@@ -121,8 +129,11 @@ if __name__ == "__main__":
 
           i+=1
 
-     with open('particle_1e6_400 .pkl', 'wb') as f: # write out current field of particles
+     with open('particle_0p5e6_100_50part.pkl', 'wb') as f: # write out current field of particles
           pickle.dump(particle, f)
+
+     with open('pressure_0p5e6_100_50part.pkl', 'wb') as f: # write out current field of particles
+          pickle.dump(pres_time, f)
 
      average_window = 30
      removed_particles_avg = [[],[]]
