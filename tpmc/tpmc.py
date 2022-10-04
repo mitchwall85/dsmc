@@ -1,3 +1,4 @@
+from audioop import avg
 from curses import pair_content
 from distutils.ccompiler import gen_preprocess_options
 from lib2to3.pgen2.token import NUMBER
@@ -66,7 +67,7 @@ if __name__ == "__main__":
      t_steps = 200
      # particle inflow
      real_particles_per_timestep = np.ceil(f_n*dt*inlet_a) # A.28
-     particles_per_timestep = 100 # choose a weighting factor such that only n particles are simulated per timestep
+     particles_per_timestep = 10 # choose a weighting factor such that only n particles are simulated per timestep
      wp = real_particles_per_timestep/particles_per_timestep # weighting factor
 
      particle = []
@@ -97,12 +98,15 @@ if __name__ == "__main__":
                # detect wall collisions by looping over cells
                for c in np.arange(np.shape(wall_grid.centroids)[0]):
                     # create element basis centered on centroid
-                    cell_n = wall_grid.normals[c]/np.linalg.norm(wall_grid.normals[c])
+                    cell_n = wall_grid.normals[c]
                     # transform positions to new basis
                     cent = wall_grid.centroids[c]
                     cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2])
                     cell_n_f = cell_n.dot(cent - particle[p].posn_hist[-1])
                     if np.sign(cell_n_f) != np.sign(cell_n_i):
+                         cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
+                         cell_n_i = cell_n_i/cell_n_mag
+                         cell_n_f = cell_n_f/cell_n_mag
 
                          pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
                          intersect = particle[p].posn_hist[-2] + pct_vect*dt*particle[p].vel # TODO check
@@ -127,6 +131,15 @@ if __name__ == "__main__":
           removed_particles_time[0].append(i*dt)
           removed_particles_time[1].append(removed)
 
+          # detect if steady state is reached and if post processing should start
+          pct_window = 0.2 # check last 20% of simulation
+          window = int(np.ceil(pct_window*i))
+          pp_tolerance = 0.15 # be within 15% of inlet value to start post processing
+          avg_window = np.mean(removed_particles_time[1][-window:])
+          if avg_window*(1 + pp_tolerance) > particles_per_timestep and avg_window*(1 - pp_tolerance) < particles_per_timestep:
+               print('Start Post Processing!')
+
+
           i+=1
 
      with open('particle_0p5e6_100_50part.pkl', 'wb') as f: # write out current field of particles
@@ -142,6 +155,8 @@ if __name__ == "__main__":
           removed_particles_avg[1].append(np.mean(removed_particles_time[1][w-average_window:w])) 
 
      plt.plot(removed_particles_avg[0], removed_particles_avg[1])
+     plt.ylabel("Particles Removed Per Timestep")
+     plt.xlabel("Time [s]")
      
 
      plt.show()
