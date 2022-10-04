@@ -6,10 +6,11 @@ from xml.etree.ElementTree import QName
 from pint import UnitRegistry
 import numpy as np
 from particle import PARTICLE
+from postprocess import POST_PROCESS
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from stl import mesh
-from utilities import gen_velocity, gen_posn, KB, read_stl, in_element
+from utilities import gen_velocity, gen_posn, KB, read_stl, in_element, start_postproc
 from scipy.spatial.transform import Rotation as R
 from scipy import special
 import pickle
@@ -38,6 +39,12 @@ WALL_GRID_NAME   = r"../../geometry/cylinder_d2mm_l20mm_v1.stl"
 INLET_GRID_NAME  = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
 OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
 
+# Post processing parameters
+PCT_WINDOW = 0.2 # check last n% of simulation
+PP_TOLERANCE = 0.20 # be within n% of inlet value to start post processing
+POST_PROC = False # start by not post processing results until convergence criteria reached
+CYLINDER_GRIDS = 10 # number of points to extract from cylinder
+
 if __name__ == "__main__":
      """ loop through time for TPMC simulation
      """
@@ -46,10 +53,16 @@ if __name__ == "__main__":
      wall_grid = read_stl(WALL_GRID_NAME)
      inlet_grid = read_stl(INLET_GRID_NAME)
      outlet_grid = read_stl(OUTLET_GRID_NAME)
-
      surf_normal = np.array([1, 0, 0])
      no_wall_elems = np.shape(wall_grid.centroids)[0]
 
+     # output grid info
+     n_0 = inlet_grid.points[0][0] # TODO does not generatlze to non-x normal surfaces
+     n_l = outlet_grid.points[0][0] # TODO does not generatlze to non-x normal surfaces
+     dx = (n_l-n_0)/CYLINDER_GRIDS
+     output_grids = np.vstack([np.linspace(n_0 + dx/2, n_l - dx/2, CYLINDER_GRIDS), np.zeros(CYLINDER_GRIDS), np.zeros(CYLINDER_GRIDS)])
+     # create output class
+     post_proc = POST_PROCESS(output_grids, wall_grid,)
 
      # number flux
      c_m = np.sqrt(2*KB*FREESTREAM_TEMP/M)
@@ -132,21 +145,15 @@ if __name__ == "__main__":
           removed_particles_time[1].append(removed)
 
           # detect if steady state is reached and if post processing should start
-          pct_window = 0.2 # check last 20% of simulation
-          window = int(np.ceil(pct_window*i))
-          pp_tolerance = 0.15 # be within 15% of inlet value to start post processing
-          avg_window = np.mean(removed_particles_time[1][-window:])
-          if avg_window*(1 + pp_tolerance) > particles_per_timestep and avg_window*(1 - pp_tolerance) < particles_per_timestep:
-               print('Start Post Processing!')
+          if not POST_PROC:
+               if start_postproc(PCT_WINDOW, PP_TOLERANCE, removed_particles_time, particles_per_timestep, i):
+                    POST_PROC = True # just turn this flag on once
+          else:
+               a = 1
+               # do post processing stuff here
+               
 
-
-          i+=1
-
-     with open('particle_0p5e6_100_50part.pkl', 'wb') as f: # write out current field of particles
-          pickle.dump(particle, f)
-
-     with open('pressure_0p5e6_100_50part.pkl', 'wb') as f: # write out current field of particles
-          pickle.dump(pres_time, f)
+          i+=1 # add to timestep index, continue to next timestep
 
      average_window = 30
      removed_particles_avg = [[],[]]

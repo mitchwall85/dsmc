@@ -119,5 +119,15 @@ def in_element(cell_points, normal, intersect):
             cell_points = np.roll(cell_points,3)
 
     return in_elem
+
+
+def start_postproc(pct_window, pp_tolerance, particles, particles_per_timestep, i):
+
+    # detect if steady state is reached and if post processing should start
+    window = int(np.ceil(pct_window*i))
+    avg_window = np.mean(particles[1][-window:])
+    if avg_window > particles_per_timestep*(1 - pp_tolerance) and avg_window < particles_per_timestep*(1 + pp_tolerance):
+        print('Start Post Processing!')
+        return True
     
     
