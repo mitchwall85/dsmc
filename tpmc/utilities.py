@@ -1,15 +1,9 @@
 import numpy as np
 from stl import mesh
-from particle import PARTICLE
 import matplotlib.pyplot as plt
 
 # Constants
 KB = 1.380649e-23 # [m^2*kg/s^2/K]
-
-def check_in_cell(r: np.array, cell: np.array):
-    a = 1
-    # TODO move to particle class?
-
 
 def read_stl(file: str):
 
@@ -18,7 +12,39 @@ def read_stl(file: str):
 # TODO s
 # something to visualize geometry of grid and test object
 
-def gen_velocity(blk: np.ndarray, c_m, s_n ): # TODO How does this even work anymore?
+
+
+def in_element(cell_points, normal, intersect):
+
+    num_p = int(cell_points.__len__()/3)
+    cell_points = cell_points.reshape(3,num_p)
+
+    in_elem = True
+    for p in np.arange(0,num_p):
+        v1 = cell_points[0] - cell_points[1]
+        v2 = np.cross(normal, v1) # IS THIS AN OUTWARD FACING NORMAL?
+        s1 = v2.dot(intersect - cell_points[0])
+
+        if s1 > 0:
+            in_elem = False 
+            break
+        else:
+            cell_points = np.roll(cell_points,3)
+
+    return in_elem
+
+
+def start_postproc(pct_window, pp_tolerance, particles, particles_per_timestep, i):
+
+    # detect if steady state is reached and if post processing should start
+    window = int(np.ceil(pct_window*i))
+    avg_window = np.mean(particles[1][-window:])
+    if avg_window > particles_per_timestep*(1 - pp_tolerance) and avg_window < particles_per_timestep*(1 + pp_tolerance):
+        print('Start Post Processing!')
+        return True
+    
+
+def gen_velocity(blk: np.ndarray, c_m, s_n ):
     """generate a boltzmann distribution of velocities
 
     Args:
@@ -100,34 +126,4 @@ def gen_posn(grid): # whats the type hint here?
 
     return np.array([0, y[0], z[0]])
 
-
-def in_element(cell_points, normal, intersect):
-
-    num_p = int(cell_points.__len__()/3)
-    cell_points = cell_points.reshape(3,num_p)
-
-    in_elem = True
-    for p in np.arange(0,num_p):
-        v1 = cell_points[0] - cell_points[1]
-        v2 = np.cross(normal, v1) # IS THIS AN OUTWARD FACING NORMAL?
-        s1 = v2.dot(intersect - cell_points[0])
-
-        if s1 > 0:
-            in_elem = False 
-            break
-        else:
-            cell_points = np.roll(cell_points,3)
-
-    return in_elem
-
-
-def start_postproc(pct_window, pp_tolerance, particles, particles_per_timestep, i):
-
-    # detect if steady state is reached and if post processing should start
-    window = int(np.ceil(pct_window*i))
-    avg_window = np.mean(particles[1][-window:])
-    if avg_window > particles_per_timestep*(1 - pp_tolerance) and avg_window < particles_per_timestep*(1 + pp_tolerance):
-        print('Start Post Processing!')
-        return True
-    
     
