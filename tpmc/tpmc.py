@@ -25,11 +25,11 @@ import sys
 
 # specular neutral wall
 DT = 1e-6 
-T_STEPS = 1000
-PARTICLES_PER_TIMESTEP = 20 # choose a weighting factor such that only n particles are simulated per timestep
+T_STEPS = 2000
+PARTICLES_PER_TIMESTEP = 15 # choose a weighting factor such that only n particles are simulated per timestep
 # freestream conditions
-FREESTREAM_VEL = np.array([1000, 0, 0]) # m/s, x velocity
-ALPHA = 0 # accomidation coeff
+FREESTREAM_VEL = np.array([7800, 0, 0]) # m/s, x velocity
+ALPHA = 1 # accomidation coeff
 T_TW = 1 # wall temp ratio
 
 # tube geom
@@ -49,8 +49,8 @@ OUTLET_GRID_NAME = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
 # Post processing parameters
 PCT_WINDOW = 0.2 # check last n% of simulation
 PP_TOLERANCE = 0.1 # be within n% of inlet value to start post processing
-CYLINDER_GRIDS = 20 # number of points to extract from cylinder
-OUTPUT_DIR = r"./figs/"
+CYLINDER_GRIDS = 10 # number of points to extract from cylinder
+OUTPUT_DIR = r"./figs/ttw1_alp0_7800/"
 AVERAGE_WINDOW = 30 # average for removed particles
 PLOT_FREQ = 10
 
@@ -106,13 +106,12 @@ if __name__ == "__main__":
                r = gen_posn(inlet_grid)
                particle.append(PARTICLE(mass = M, r=r, init_posn=r, init_vel=v, t_init=0, bulk_vel=FREESTREAM_VEL)) # fix t_init
 
-
           p = 0
           removed = 0
           removed_outlet = 0
           removed_inlet = 0
           pres = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
-          ener = np.array([0]*no_wall_elems) # thermal energy matrix
+          ener = [0]*no_wall_elems # thermal energy matrix
           axial_stress = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
           while p < len(particle):
                dx = particle[p].vel * DT
@@ -140,7 +139,7 @@ if __name__ == "__main__":
                               else:
                                    dm, de = particle[p].reflect_diffuse(cell_n, DT, cell_n_i, cell_n_f, T_TW, c_m)
                                    # energy change
-                                   ener[c] = ener[c] + de*M/DT/2 # convert to Joules
+                                   ener[c] = ener[c] + de*M/DT/2*wp # convert to Joules
                               # pressure contribution from reflection
                               pres_scalar = np.linalg.norm(dm[1:3]/DT/wall_grid.areas[c]) # not a very clevery way to get normal compoent
                               pres[c].append(pres_scalar) 
@@ -152,12 +151,14 @@ if __name__ == "__main__":
                     particle.remove(particle[p])
                     removed_outlet+=1
                     removed+=1
+                    p-=1
                if particle[p].exit_domain_inlet(n_0):
                     particle.remove(particle[p])
                     removed_inlet+=1
                     removed+=1
-               else:
-                    p += 1
+                    p-=1
+
+               p += 1
                     
           # find now many particles leave the domain per timestep
           removed_particles_time[0].append(i*DT)
@@ -179,7 +180,7 @@ if __name__ == "__main__":
                     start_post = True # just turn this flag on once
           else:
                # update outputs
-               post_proc.update_outputs(particle, pres, ener, axial_stress)
+               post_proc.update_outputs(particle, pres, np.array(ener), axial_stress)
                print(f"Post Processing...")
 
                # create plots

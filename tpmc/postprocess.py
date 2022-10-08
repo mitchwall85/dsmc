@@ -62,7 +62,7 @@ class POST_PROCESS:
 
                 temp_dir = np.zeros(3)
                 for t in np.arange(0,3):
-                    temp_dir[t] = M/KB*(np.mean(np.square(vels[t,:])) - np.square(np.mean(vels[t,:]))) # the mean of the square and the square of the mean
+                    temp_dir[t] = M/KB*(np.mean(np.square(vels[:,t])) - np.square(np.mean(vels[:,t]))) # the mean of the square and the square of the mean
 
                 temp = np.mean(temp_dir)
 
@@ -78,14 +78,14 @@ class POST_PROCESS:
             n_coll = 0
             for elem in c:
                 n_coll = n_coll + pressure[elem].__len__()
-            self.collision_rate_cyl[i] = n_coll/self.areacell_volume[i]/self.dt
+            self.collision_rate_cyl[i] = self.wp*n_coll/self.areacell_volume[i]/self.dt
 
             i+=1 # update cell index
 
         # surface properties
         # calculate average pressure vector
         pressure_sum = [sum(x) for x in pressure]
-        pres = np.array(pressure_sum)*self.wp # \\\\ TODO multiply by wp everywhere
+        pres = np.array(pressure_sum)*self.wp 
         self.pressure = self.weight_new_output(self.pressure, pres)
 
         # calculate axial pressure vector
