@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 # Constants
 KB = 1.380649e-23 # [m^2*kg/s^2/K]
+M = 28.0134/1000/6.02e23 # mass of a N2 molecule [kg] TODO this is terrible to hardcode. fix later
+AVOS_NUM = 6.02e23
 
 def read_stl(file: str):
 
@@ -40,7 +42,7 @@ def start_postproc(pct_window, pp_tolerance, particles, particles_per_timestep, 
     window = int(np.ceil(pct_window*i))
     avg_window = np.mean(particles[1][-window:])
     if avg_window > particles_per_timestep*(1 - pp_tolerance) and avg_window < particles_per_timestep*(1 + pp_tolerance):
-        print('Start Post Processing!')
+        print('*******************START POST PROCESSING*******************')
         return True
     
 
