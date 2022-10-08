@@ -23,6 +23,7 @@ for b in np.arange(0,np.size(blk)):
 # expression found from: https://physics.stackexchange.com/questions/320500/maxwell-boltzmann-distribution-average-speed-in-one-direction
 vi = np.linspace(-2000,2000,1000)
 mb = np.sqrt(m/2/np.pi/k/Ttr)*np.exp(-m*vi**2/2/k/Ttr)
+
     
 # A:    
 # plot each component
