@@ -29,7 +29,7 @@ T_STEPS = 2000
 PARTICLES_PER_TIMESTEP = 15 # choose a weighting factor such that only n particles are simulated per timestep
 # freestream conditions
 FREESTREAM_VEL = np.array([7800, 0, 0]) # m/s, x velocity
-ALPHA = 1 # accomidation coeff
+ALPHA = 0 # accomidation coeff
 T_TW = 1 # wall temp ratio
 
 # tube geom
