@@ -112,7 +112,7 @@ class CASE_TPMC:
             for n in np.arange(0,self.particles_per_timestep):
                 v = gen_velocity(self.freestream_vel, c_m, s_n) # TODO formulate for general inlet plane orientation
                 r = gen_posn(inlet_grid)
-                particle.append(PARTICLE(mass = m, r=r, init_posn=r, init_vel=v, t_init=0, bulk_vel=freestream_vel)) # fix t_init
+                particle.append(PARTICLE(mass = self.m, r=r, init_posn=r, init_vel=v, t_init=0, bulk_vel=self.freestream_vel)) # fix t_init
 
             p = 0
             removed = 0
@@ -122,7 +122,7 @@ class CASE_TPMC:
             ener = [0]*no_wall_elems # thermal energy matrix
             axial_stress = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
             while p < len(particle):
-                dx = particle[p].vel * dt
+                dx = particle[p].vel * self.dt
                 particle[p].update_posn_hist(particle[p].posn_hist[-1] + dx)
 
                 # detect wall collisions by looping over cells
@@ -142,10 +142,10 @@ class CASE_TPMC:
                             intersect = particle[p].posn_hist[-2] + pct_vect*self.dt*particle[p].vel
 
                             if in_element(wall_grid.points[c], cell_n, intersect):
-                                if np.random.rand(1) > alpha:
+                                if np.random.rand(1) > self.alpha:
                                     dm = particle[p].reflect_specular(cell_n, self.dt, cell_n_i, cell_n_f)
                                 else:
-                                    dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, t_tw, c_m)
+                                    dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
                                     # energy change
                                     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
                                 # pressure contribution from reflection
@@ -174,13 +174,13 @@ class CASE_TPMC:
             removed_particles_inlet.append(removed_inlet)
             removed_particles_outlet.append(removed_outlet)
             # plot removed particles with time
-            post_proc.plot_removed_particles(output_dir, t_tw, alpha, removed_particles_time, removed_particles_outlet, removed_particles_inlet, self.average_window) # dont hardcode this value
+            post_proc.plot_removed_particles(self.output_dir, self.t_tw, self.alpha, removed_particles_time, removed_particles_outlet, removed_particles_inlet, self.average_window) # dont hardcode this value
             
             # print status to terminal
             print(f"--------------------------------------------------------------------------")
             print(f'Particles removed: {removed}')
-            print(f"Total Time: {i*dt}")
-            print(f"Time Steps: {100*(i)/t_steps} %")
+            print(f"Total Time: {i*self.dt}")
+            print(f"Time Steps: {100*(i)/self.t_steps} %")
 
             # detect if steady state is reached and if post processing should start
             if not start_post:
@@ -203,7 +203,7 @@ class CASE_TPMC:
             i+=1 # add to timestep index, continue to next timestep
 
 
-    def time_loop(self):
-        """move time loop here
+    def readme_output(self):
+        """write out readme to output directory with info about the model
         """
         a = 1
