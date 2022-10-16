@@ -35,7 +35,7 @@ class CASE_TPMC:
         self.alpha = alpha # accomidation coeff
         self.t_tw = t_tw # wall temp ratio
 
-        # tube geomgit
+        # tube geom
         self.tube_d = tube_d # TODO replace this with just a reference length, I think thats all its used for
 
         # freestream conditions
