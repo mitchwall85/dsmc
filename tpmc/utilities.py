@@ -1,6 +1,7 @@
 import numpy as np
 from stl import mesh
 import matplotlib.pyplot as plt
+import os
 
 # Constants
 KB = 1.380649e-23 # [m^2*kg/s^2/K]
@@ -99,11 +100,12 @@ def gen_posn(grid): # whats the type hint here?
     # only works on flat surface with X normal
     dy = grid.max_[1] - grid.min_[1]
     dz = grid.max_[2] - grid.min_[2]
+
     try_again = True
     while try_again:
 
-        y = dy*np.random.rand(1) - grid.max_[1] # does this require a center at 0,0?
-        z = dz*np.random.rand(1) - grid.max_[2]
+        y = dy*np.random.rand(1) + grid.min_[1] # does this require a center at 0,0? -- yes, fix that TODO
+        z = dz*np.random.rand(1) + grid.min_[2]
         r = np.array([0, y[0], z[0]])
 
 
@@ -128,4 +130,9 @@ def gen_posn(grid): # whats the type hint here?
 
     return np.array([0, y[0], z[0]])
 
+def make_directory(dir_name: str):
+    """makes directory if it does not already exist"""
+
+    if not os.path.exists(dir_name):
+        os.mkdir(dir_name)
     

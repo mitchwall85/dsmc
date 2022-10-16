@@ -78,7 +78,9 @@ class POST_PROCESS:
             n_coll = 0
             for elem in c:
                 n_coll = n_coll + pressure[elem].__len__()
-            self.collision_rate_cyl[i] = self.wp*n_coll/self.areacell_volume[i]/self.dt
+            self.collision_rate_cyl[i] = self.wp*n_coll/self.areacell_volume[i]/self.dt # TODO this still needs to get averaged with other timesteps
+
+            
 
             i+=1 # update cell index
 
