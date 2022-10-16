@@ -169,7 +169,7 @@ class POST_PROCESS:
         plt.ylabel("Axial Stress [Pa]")
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_axial_stress.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_axial_stress.png")
         plt.close()
 
     def plot_heat_tfr(self, output_dir, t_tw, alpha):
@@ -179,7 +179,7 @@ class POST_PROCESS:
         plt.ylabel("Heat Transfer [W/m^2]")
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_heat_tfr.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_heat_tfr.png")
         plt.close()
 
     def plot_n_coll(self, output_dir, t_tw, alpha):
@@ -189,7 +189,7 @@ class POST_PROCESS:
         plt.ylabel("Collision Frequency [1/m^2/s]")
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_coll_freq.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_coll_freq.png")
         plt.close()
 
     def plot_n_density(self, output_dir, t_tw, alpha):
@@ -199,7 +199,7 @@ class POST_PROCESS:
         plt.ylabel("Number Density [particles/m^3]")
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_n_density.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_n_density.png")
         plt.close()
 
     def plot_temp(self, output_dir, t_tw, alpha):
@@ -209,7 +209,7 @@ class POST_PROCESS:
         plt.ylabel("Temperature [k]")
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_temp.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_temp.png")
         plt.close()
 
     def plot_pressure(self, output_dir, t_tw, alpha):
@@ -219,7 +219,7 @@ class POST_PROCESS:
         plt.ylim([0,max(self.pressure_cyl)])
         plt.xlabel("Axial Distance [m]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_pressure.png")
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_pressure.png")
         plt.close()
 
     def plot_removed_particles(self, output_dir, t_tw, alpha, removed_particles_time, removed_outlet, removed_inlet, average_window):
@@ -240,6 +240,6 @@ class POST_PROCESS:
         plt.ylabel("Particles Removed Per Timestep")
         plt.xlabel("Time [s]")
         plt.grid()
-        plt.savefig(f"{output_dir}ttw{t_tw}_alp{alpha}_removed_particles.png") 
+        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_removed_particles.png") 
         plt.close
         

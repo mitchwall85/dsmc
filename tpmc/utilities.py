@@ -134,5 +134,5 @@ def make_directory(dir_name: str):
     """makes directory if it does not already exist"""
 
     if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
+        os.makedirs(dir_name)
     

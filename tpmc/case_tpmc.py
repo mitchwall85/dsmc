@@ -10,6 +10,7 @@ from utilities import KB, read_stl, in_element, start_postproc, gen_posn, gen_ve
 from scipy.spatial.transform import Rotation as R
 from scipy import special
 import sys
+import os
 
 # General things to add
 # TODO add pint
@@ -55,7 +56,7 @@ class CASE_TPMC:
         self.cylinder_grids = cylinder_grids # number of points to extract from cylinder
         self.output_dir = output_dir
         self.average_window = average_window # average for removed particles
-        self. plot_freq = plot_freq
+        self.plot_freq = plot_freq
 
         make_directory(self.output_dir)
         
