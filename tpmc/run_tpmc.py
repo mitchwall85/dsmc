@@ -9,11 +9,11 @@ import os
 ################################################################
 case_name = r'test_case_1'
 # specular neutral wall
-dt = 5e-6 
+dt = 1e-6 
 t_steps = 100
-particles_per_timestep = 15 # choose a weighting factor such that only n particles are simulated per timestep
+particles_per_timestep = 10 # choose a weighting factor such that only n particles are simulated per timestep
 # freestream conditions
-freestream_vel = np.array([0, 0, 0]) # m/s, x velocity
+freestream_vel = np.array([1000, 0, 0]) # m/s, x velocity
 alpha = 0 # accomidation coeff
 t_tw = 1 # wall temp ratio
 
