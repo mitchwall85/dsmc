@@ -12,7 +12,6 @@ class PARTICLE:
         self.t = t_init
         self.posn_hist =  np.array([init_posn])
         self.bulk_vel = bulk_vel
-        # TODO add flag for diffuse impact
         
 
     def reflect_specular(self, wall: np.array, dt: float, cell_n_i, cell_n_f):

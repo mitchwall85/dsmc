@@ -1,5 +1,5 @@
 
-from turtle import st
+from turtle import pos, st
 import numpy as np
 from particle import PARTICLE
 from postprocess import POST_PROCESS
@@ -97,11 +97,18 @@ class CASE_TPMC:
         post_proc = POST_PROCESS(output_grids, wall_grid, wp, self.dt)
 
         # initalize variables
-        particle = []
+        particles = np.array(['rx1','ry1','rz1','rx2','ry2','rz2','vx','vy','vz','bvx','bvy','bvz','m','mol_diam',], dtype=object)
         removed_particles_time = [[],[]] # 2d list for plotting removed particles
         removed_particles_inlet = []
         removed_particles_outlet = []
-        pres_time = [] # pressure matrix over all timesteps
+
+        # particle variable indices
+        posn_1 = slice(0, 3)
+        posn_2 = slice(3, 6)
+        vel = slice(6, 9)
+        bulk_vel = slice(9, 12)
+        m = 12
+        mol_diam = 13
 
         i = 1 # timestep index
         removed = 0 # initalize number of removed particle objects
@@ -113,18 +120,22 @@ class CASE_TPMC:
             for n in np.arange(0,self.particles_per_timestep):
                 v = gen_velocity(self.freestream_vel, c_m, s_n) # TODO formulate for general inlet plane orientation
                 r = gen_posn(inlet_grid)
-                particle.append(PARTICLE(mass = self.m, r=r, init_posn=r, init_vel=v, t_init=0, bulk_vel=self.freestream_vel)) # fix t_init
+                # create list of inputs for particle
+                new_particle = self.create_particle(r, v)
+                particles = np.vstack([particles,new_particle])
 
-            p = 0
+
+            p = 1 # start at 1 since first row is lables
             removed = 0
             removed_outlet = 0
             removed_inlet = 0
             pres = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
             ener = [0]*no_wall_elems # thermal energy matrix
             axial_stress = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
-            while p < len(particle):
-                dx = particle[p].vel * self.dt
-                particle[p].update_posn_hist(particle[p].posn_hist[-1] + dx)
+            while p < np.shape(particles)[0]:
+                # print(f'Checking Particle {p}')
+                dx = particles[p][vel] * self.dt
+                particles[p][posn_1] = particles[p][posn_1] + dx
 
                 # detect wall collisions by looping over cells
                 for c in np.arange(np.shape(wall_grid.centroids)[0]):
@@ -132,23 +143,25 @@ class CASE_TPMC:
                         cell_n = wall_grid.normals[c]
                         # transform positions to new basis
                         cent = wall_grid.centroids[c]
-                        cell_n_i = cell_n.dot(cent - particle[p].posn_hist[-2])
-                        cell_n_f = cell_n.dot(cent - particle[p].posn_hist[-1])
+                        cell_n_i = cell_n.dot(cent - particles[p][posn_2])
+                        cell_n_f = cell_n.dot(cent - particles[p][posn_1])
                         if np.sign(cell_n_f) != np.sign(cell_n_i):
                             cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
                             cell_n_i = cell_n_i/cell_n_mag
                             cell_n_f = cell_n_f/cell_n_mag
 
                             pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-                            intersect = particle[p].posn_hist[-2] + pct_vect*self.dt*particle[p].vel
+                            intersect = particles[p][posn_2] + pct_vect*self.dt*particles[p][vel]
 
                             if in_element(wall_grid.points[c], cell_n, intersect):
                                 if np.random.rand(1) > self.alpha:
-                                    dm = particle[p].reflect_specular(cell_n, self.dt, cell_n_i, cell_n_f)
-                                else:
-                                    dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
-                                    # energy change
-                                    ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
+                                    dm, particle_reflected = self.reflect_specular( particles[p], posn_1, posn_2, vel, m, cell_n, cell_n_i, cell_n_f)
+                                particles[p] = particle_reflected
+                                # TODO fix specular reflection function
+                                # else:
+                                #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
+                                #     # energy change
+                                #     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
                                 # pressure contribution from reflection
                                 pres_scalar = np.linalg.norm(dm[1:3]/self.dt/wall_grid.areas[c]) # not a very clevery way to get normal compoent
                                 pres[c].append(pres_scalar) 
@@ -156,13 +169,13 @@ class CASE_TPMC:
                                 axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
                                 axial_stress[c].append(axial_stress_scalar)
                 
-                if particle[p].exit_domain_outlet(n_l):
-                        particle.remove(particle[p])
+                if self.exit_domain_outlet(particles[p], posn_1, n_l):
+                        particles = np.delete(particles, p, 0)
                         removed_outlet+=1
                         removed+=1
                         p-=1
-                if particle[p].exit_domain_inlet(n_0):
-                        particle.remove(particle[p])
+                if self.exit_domain_inlet(particles[p], posn_1, n_0):
+                        particles = np.delete(particles, p, 0)
                         removed_inlet+=1
                         removed+=1
                         p-=1
@@ -187,19 +200,20 @@ class CASE_TPMC:
             if not start_post:
                 if start_postproc(self.pct_window, self.pp_tolerance, removed_particles_time, self.particles_per_timestep, i):
                         start_post = True # just turn this flag on once
-            else:
-                # update outputs
-                post_proc.update_outputs(particle, pres, np.array(ener), axial_stress)
-                print(f"Post Processing...")
+            # TODO start this back up later, will require postprocess being changed a lot
+            # else:
+            #     # update outputs
+            #     post_proc.update_outputs(particles, pres, np.array(ener), axial_stress) # this is totally broken
+            #     print(f"Post Processing...")
 
-                # create plots
-                if i%self.plot_freq == 0:
-                        post_proc.plot_n_density(self.output_dir, self.t_tw, self.alpha)
-                        post_proc.plot_temp(self.output_dir, self.t_tw, self.alpha)
-                        post_proc.plot_pressure(self.output_dir, self.t_tw, self.alpha)
-                        post_proc.plot_heat_tfr(self.output_dir, self.t_tw, self.alpha)
-                        post_proc.plot_n_coll(self.output_dir, self.t_tw, self.alpha)
-                        post_proc.plot_shear(self.output_dir, self.t_tw, self.alpha)
+            #     # create plots
+            #     if i%self.plot_freq == 0:
+            #             post_proc.plot_n_density(self.output_dir, self.t_tw, self.alpha)
+            #             post_proc.plot_temp(self.output_dir, self.t_tw, self.alpha)
+            #             post_proc.plot_pressure(self.output_dir, self.t_tw, self.alpha)
+            #             post_proc.plot_heat_tfr(self.output_dir, self.t_tw, self.alpha)
+            #             post_proc.plot_n_coll(self.output_dir, self.t_tw, self.alpha)
+            #             post_proc.plot_shear(self.output_dir, self.t_tw, self.alpha)
 
             i+=1 # add to timestep index, continue to next timestep
 
@@ -208,3 +222,73 @@ class CASE_TPMC:
         """write out readme to output directory with info about the model
         """
         a = 1
+
+    def create_particle(self, r, v):
+        """append particle to current list
+
+        Args:
+            case (_type_): _description_
+        """
+        # TODO this is gross
+        particle_data = np.append(r,[0,0,0])
+        particle_data = np.append(particle_data, v)
+        particle_data = np.append(particle_data, self.freestream_vel)
+        particle_data = np.append(particle_data, self.m)
+        particle_data = np.append(particle_data, self.molecule_d)
+
+        return particle_data
+
+
+    def reflect_specular(self, particle, posn_1, posn_2, vel, m, wall: np.array, cell_n_i, cell_n_f):
+        """calculate the reflected velocity for a specular wall impact
+        Args:
+            c (np.array): incomming velocity
+            wall (np.array): wall normal vector, inwards facing, # TODO I think this needs to be inward facing...
+            dt (float): timestep length
+            tube_d (float): diameter of tube
+        """
+
+        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+        # intersect = self.posn_hist[-2] + pct_vect*dt*self.vel
+        intersect = particle[posn_2] + pct_vect*self.dt*particle[vel]
+
+
+        # ensure wall vector is a unit vector
+        wall = wall/np.linalg.norm(wall)
+        v0 = particle[vel]
+        c_n = np.dot(particle[vel],wall)*wall # normal component to wall
+        c_p = particle[vel] - c_n # perpendicular component to wall
+        particle[vel] = c_p - c_n # flip normal component
+        dm = particle[m]*(particle[vel] - v0) # change in momentum from wall collission
+
+        # create copy of vector
+        # collision location
+        particle[posn_2] = intersect
+        # post - collision location
+        particle[posn_1] = intersect + self.dt*(1 - pct_vect)*particle[vel] # update position with fraction of remaining timestep
+
+        return dm, particle
+
+
+    def exit_domain_inlet(self, particle, posn_1, inlet_plane: float):
+        """determine if particle has left domain
+        Args:
+            exit_plane (float): Z location of exit plane
+        Returns:
+            BOOL: if partice is within domain 
+        """
+        # TODO add in point and vector definition of plane to use dot product
+        if particle[posn_1][0] < inlet_plane:
+            return True
+
+    def exit_domain_outlet(self, particle, posn_1, exit_plane: float):
+        """determine if particle has left domain
+        Args:
+            exit_plane (float): Z location of exit plane
+        Returns:
+            BOOL: if partice is within domain 
+        """
+        # TODO add in point and vector definition of plane to use dot product
+        if particle[posn_1][0] >= exit_plane:
+            return True
+    
