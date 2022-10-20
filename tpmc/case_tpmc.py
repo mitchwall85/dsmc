@@ -11,6 +11,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy import special
 import sys
 import os
+import time
 
 # General things to add
 # TODO add pint
@@ -98,6 +99,7 @@ class CASE_TPMC:
 
         # initalize variables
         particles = np.array(['rx1','ry1','rz1','rx2','ry2','rz2','vx','vy','vz','bvx','bvy','bvz','m','mol_diam',], dtype=object)
+        # r1 is the current position, r2 is the old position
         removed_particles_time = [[],[]] # 2d list for plotting removed particles
         removed_particles_inlet = []
         removed_particles_outlet = []
@@ -116,6 +118,7 @@ class CASE_TPMC:
         removed_inlet = 0 
         start_post = False # start by not post processing results until convergence criteria reached
         while i < self.t_steps:
+            timestep_time = time.perf_counter()
             # generate particles for each timestep
             for n in np.arange(0,self.particles_per_timestep):
                 v = gen_velocity(self.freestream_vel, c_m, s_n) # TODO formulate for general inlet plane orientation
@@ -132,12 +135,15 @@ class CASE_TPMC:
             pres = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
             ener = [0]*no_wall_elems # thermal energy matrix
             axial_stress = [[] for x in np.arange(0,no_wall_elems)] # pressure matrix for current timestep
+
+            # print(f'Checking Particle {p}')
+            particles[1:,posn_2] = particles[1:,posn_1]
+            particles[1:,posn_1] = particles[1:,vel]*self.dt + particles[1:,posn_2]
+
             while p < np.shape(particles)[0]:
-                # print(f'Checking Particle {p}')
-                dx = particles[p][vel] * self.dt
-                particles[p][posn_1] = particles[p][posn_1] + dx
 
                 # detect wall collisions by looping over cells
+                collision_detect_time = time.perf_counter()
                 for c in np.arange(np.shape(wall_grid.centroids)[0]):
                         # create element basis centered on centroid
                         cell_n = wall_grid.normals[c]
@@ -169,16 +175,23 @@ class CASE_TPMC:
                                 axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
                                 axial_stress[c].append(axial_stress_scalar)
                 
+                # print(f"Collision Detect: {time.perf_counter() - collision_detect_time}")
+
+                exited = False # flag if partilcle gets removed
+                particle_remove_time = time.perf_counter()
                 if self.exit_domain_outlet(particles[p], posn_1, n_l):
                         particles = np.delete(particles, p, 0)
                         removed_outlet+=1
                         removed+=1
-                        p-=1
+                        exited = True
                 if self.exit_domain_inlet(particles[p], posn_1, n_0):
                         particles = np.delete(particles, p, 0)
                         removed_inlet+=1
                         removed+=1
-                        p-=1
+                        exited = True
+                if exited:
+                    p-=1
+                    # print(f"Particle Removal: {time.perf_counter() - particle_remove_time}")
 
                 p += 1
                         
@@ -215,6 +228,7 @@ class CASE_TPMC:
             #             post_proc.plot_n_coll(self.output_dir, self.t_tw, self.alpha)
             #             post_proc.plot_shear(self.output_dir, self.t_tw, self.alpha)
 
+            print(f"Timestep Time: {time.perf_counter() - timestep_time}")
             i+=1 # add to timestep index, continue to next timestep
 
 
