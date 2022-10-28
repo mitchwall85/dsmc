@@ -85,3 +85,21 @@ def random_inlet_velocity(case: CASE_TPMC, n: int):
     plt.savefig(f"{case.output_dir}/inlet_velocity_verifiction.png")
     plt.close()
 
+
+def plot_grid(grid_name: str):
+
+    # test random inlet generation
+    inlet_grid = read_stl(grid_name)
+
+    num_points = np.shape(inlet_grid.x)[0]
+
+    x = np.reshape(inlet_grid.x, (1,num_points*3))
+    y = np.reshape(inlet_grid.y, (1,num_points*3))
+    z = np.reshape(inlet_grid.z, (1,num_points*3))
+
+    fig = plt.figure(figsize=(12, 12))
+    ax = fig.add_subplot(projection='3d')
+
+    ax.scatter(x, y, z)
+    plt.show()
+
