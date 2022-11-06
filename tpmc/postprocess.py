@@ -222,7 +222,7 @@ class POST_PROCESS:
         plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_pressure.png")
         plt.close()
 
-    def plot_removed_particles(self, output_dir, t_tw, alpha, removed_particles_time, removed_outlet, removed_inlet, average_window):
+    def plot_removed_particles(self, removed_particles_time, removed_outlet, removed_inlet, average_window):
         removed_particles_avg = [[],[]]
         removed_inlet_avg = []
         removed_outlet_avg = []
@@ -240,6 +240,6 @@ class POST_PROCESS:
         plt.ylabel("Particles Removed Per Timestep")
         plt.xlabel("Time [s]")
         plt.grid()
-        plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_removed_particles.png") 
+        plt.savefig(f"{self.output_dir}/ttw{self.t_tw}_alp{self.alpha}_removed_particles.png") 
         plt.close
         
