@@ -155,6 +155,7 @@ class CASE_TPMC:
                 # detect wall collisions by looping over cells
                 collision_detect_time = time.perf_counter()
                 for c in np.arange(np.shape(wall_grid.centroids)[0]):
+                    a = 1
                         # create element basis centered on centroid
                         cell_n = wall_grid.normals[c]
                         # transform positions to new basis
@@ -188,7 +189,7 @@ class CASE_TPMC:
                 
                 # print(f"Collision Detect: {time.perf_counter() - collision_detect_time}")
 
-                particle_remove_time = time.perf_counter()
+                # particle_remove_time = time.perf_counter()
                 # TODO flip the has_particle flag
                 if self.exit_domain_outlet(particles[p], posn_1, n_l):
                         particles[p][has_particle] = 0 # flip flag to "no particle"
