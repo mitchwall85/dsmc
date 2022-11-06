@@ -17,8 +17,11 @@ freestream_vel = np.array([1000, 0, 0]) # m/s, x velocity
 alpha = 0 # accomidation coeff
 t_tw = 1 # wall temp ratio
 
-# tube geomgit
+# tube geom
 tube_d = 0.002
+
+# size of particle array
+num_particles = 250
 
 # freestream conditions
 freestream_temp = 300 # k
@@ -42,7 +45,8 @@ plot_freq = 10
 case_1 = CASE_TPMC(case_name, dt, t_steps, particles_per_timestep, freestream_vel, \
             alpha, t_tw, tube_d, freestream_temp, kn, m, molecule_d, \
             wall_grid_name, inlet_grid_name, outlet_grid_name, pct_window, \
-            pp_tolerance, cylinder_grids, output_dir, average_window, plot_freq )
+            pp_tolerance, cylinder_grids, output_dir, average_window, plot_freq, \
+            num_particles)
 
 
 case_1.execute_case()
