@@ -108,21 +108,10 @@ def gen_posn(grid): # whats the type hint here?
         z = dz*np.random.rand(1) + grid.min_[2]
         r = np.array([0, y[0], z[0]])
 
-
+        
         for c in np.arange(np.shape(grid.centroids)[0]): # replace with in_element()
-            v1 = grid.points[c][0:3] - grid.points[c][3:6]
-            v1_1 = np.cross(np.array([1,0,0]), v1)
-            s1 = v1_1.dot(r - grid.points[c][0:3])
 
-            v2 = grid.points[c][3:6] - grid.points[c][-3:]
-            v2_1 = np.cross(np.array([1,0,0]), v2)
-            s2 = v2_1.dot(r - grid.points[c][3:6])
-
-            v3 = grid.points[c][-3:] - grid.points[c][0:3]
-            v3_1 = np.cross(np.array([1,0,0]), v3)
-            s3 = v3_1.dot(r - grid.points[c][-3:])
-
-            if s1 < 0 and s2 < 0 and s3 < 0:
+            if in_element(grid.points[c], grid.normals[c], r):
                 try_again = False
                 break
             else:
