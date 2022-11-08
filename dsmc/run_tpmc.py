@@ -10,7 +10,7 @@ import os
 case_name = r'test_case_1'
 # specular neutral wall
 dt = 5e-6 
-t_steps = 20
+t_steps = 100
 particles_per_timestep = 10 # choose a weighting factor such that only n particles are simulated per timestep
 # freestream conditions
 freestream_vel = np.array([1000, 0, 0]) # m/s, x velocity
@@ -19,7 +19,7 @@ t_tw = 1 # wall temp ratio
 
 # geom
 tube_d = 0.002
-coll_cell_width = 0.0005
+coll_cell_width = 0.002
 
 # size of particle array
 num_particles = 250
@@ -31,9 +31,10 @@ m = 28.0134/1000/AVOS_NUM # mass of a N2 molecule [kg]
 molecule_d = 364e-12 # [m]
 
 # grids names ( must be continuous when assemebled)
-wall_grid_name   = r"../../../geometry/square_scaline_wall_v1.stl"
-inlet_grid_name  = r"../../../geometry/square_scaline_inlet_v1.stl"
-outlet_grid_name = r"../../../geometry/square_scaline_outlet_v1.stl"
+geometry_dir = r"/home/mitch/odrive-agent-mount/OneDrive For Business/CUBoulder/ASEN6061/geometry"
+wall_grid_name   = r"square_scaline_wall_v1.stl"
+inlet_grid_name  = r"square_scaline_inlet_v1.stl"
+outlet_grid_name = r"square_scaline_outlet_v1.stl"
 
 # Post processing parameters
 pct_window = 0.2 # check last n% of simulation
@@ -47,7 +48,7 @@ case_1 = CASE_TPMC(case_name, dt, t_steps, particles_per_timestep, freestream_ve
             alpha, t_tw, tube_d, freestream_temp, kn, m, molecule_d, \
             wall_grid_name, inlet_grid_name, outlet_grid_name, pct_window, \
             pp_tolerance, cylinder_grids, output_dir, average_window, plot_freq, \
-            num_particles, coll_cell_width)
+            num_particles, coll_cell_width, geometry_dir)
 
 
 case_1.execute_case()

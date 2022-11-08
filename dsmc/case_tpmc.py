@@ -12,6 +12,7 @@ from scipy import special
 import sys
 import os
 import time
+import pickle
 
 # General things to add
 # TODO add pint
@@ -26,7 +27,7 @@ class CASE_TPMC:
                  alpha: float, t_tw: float, tube_d: float, freestream_temp: float, kn: float, m: float, molecule_d:
                  float, wall_grid_name: str, inlet_grid_name: str, outlet_grid_name: str, pct_window: float,
                  pp_tolerance: float, cylinder_grids: int, output_dir: float, average_window: int, plot_freq: int,
-                 num_particles: int, coll_cell_width: float):
+                 num_particles: int, coll_cell_width: float, geometry_dir: str):
 
         self.case_name = case_name
         # specular neutral wall
@@ -54,6 +55,7 @@ class CASE_TPMC:
         self.molecule_d = molecule_d  # [m]
 
         # grids names ( must be continuous when assemebled)
+        self.geometry_dir = geometry_dir
         self.wall_grid_name = wall_grid_name
         self.inlet_grid_name = inlet_grid_name
         self.outlet_grid_name = outlet_grid_name
@@ -70,107 +72,25 @@ class CASE_TPMC:
 
         make_directory(self.output_dir)
 
+        # process grid and create connectivity from collision cells to wall emenets
+        self.process_grid()
+
     def execute_case(self):
         ############################
-        # loop over TPMC model
+        # loop over DSMC model
         ############################
-
-        # Mesh Info
-        self.wall_grid = read_stl(self.wall_grid_name)
-        self.inlet_grid = read_stl(self.inlet_grid_name)
-        self.outlet_grid = read_stl(self.outlet_grid_name)
-        surf_normal = np.array([1, 0, 0])
-        no_wall_elems = np.shape(self.wall_grid.centroids)[0]
-        # grid info
-        inlet_a = 0
-        for c in self.inlet_grid.areas:
-            inlet_a = inlet_a + c
-
-        # create collision cells
-        coll_cells = [[], [], []]  # list of grids in each direction
-        for i in [0, 1, 2]:
-            # length of coll cell domain in each dir
-            dir_len = self.wall_grid.max_[i] - self.wall_grid.min_[i]
-            # number of divisions in each direction
-            n_divs = np.floor(dir_len/self.coll_cell_width).astype(int)
-            coll_cells[i] = np.linspace(self.wall_grid.min_[
-                                        i] + self.coll_cell_width/2, self.wall_grid.max_[i] - self.coll_cell_width/2, n_divs)
-        num_coll_cells = coll_cells[0].__len__(
-        )*coll_cells[1].__len__()*coll_cells[2].__len__()
-
-        coll_cell_ids = np.zeros([num_coll_cells, 3])
-        c = 0
-        for x in np.arange(0, coll_cells[0].__len__()):
-            for y in np.arange(0, coll_cells[1].__len__()):
-                for z in np.arange(0, coll_cells[2].__len__()):
-                    coll_cell_ids[c, :] = np.array(
-                        [coll_cells[0][x], coll_cells[1][y], coll_cells[2][z]])
-                    c += 1
-
-        # now find what collision cells are close to the wall and what elements they are close to
-        # sphere inscribing cell
-        coll_cell_prox = np.sqrt(3)*self.coll_cell_width
-        # find max edge length of a wall cell
-        max_edge_len = 0
-        for c in self.wall_grid.points:
-            # reshape into a 3x3 WILL BREAK IF THERE ARE SQUARES IN THE STL SOMEHOW
-            pts = c.reshape(3, 3)
-            edge_len = np.max([np.linalg.norm(
-                pts[0] - pts[1]), np.linalg.norm(pts[1] - pts[2]), np.linalg.norm(pts[0] - pts[2])])
-            if edge_len > max_edge_len:
-                max_edge_len = edge_len
-
-        # estimate of when a cell and wall element might be intersecting
-        interaction_tolerance = max_edge_len + coll_cell_prox
-
-        # TODO this is a terrible way to do it. check if all the signs of the cc points save the same sign in the element normal direction
-        # find collision cells that are near the wall
-        intersect_wall_cells = []
-        cid = 0  # start at cell id 0
-        for cc in coll_cell_ids:
-            break_flag = False
-            wid = 0  # wall cell ID
-            for wc in self.wall_grid.centroids:
-                if break_flag:
-                    break
-                # janky expression for finding cells near wall
-                if np.linalg.norm(cc - wc) < interaction_tolerance:
-                    intersect_wall_cells.append(cid)
-                    # cid+=1
-                    break_flag = True
-                    break
-                else:
-                    break_flag = False
-
-                wid += 1
-            cid += 1
-
-        # find wall elements near each collision cell
-        # this will need to be higher dimentional later
-        elems_near_cell = [[]]*num_coll_cells
-        cid = 0
-        for cc in coll_cell_ids[intersect_wall_cells, :]:
-            wid = 0
-            for wc in self.wall_grid.centroids:
-                if np.linalg.norm(cc - wc) < interaction_tolerance:
-                    if bool(elems_near_cell[cid]):
-                        elems_near_cell[cid].append(wid)
-                    else:
-                        elems_near_cell[cid] = [wid]
-                wid += 1
-            cid += 1
-
+        
         # number flux
         sigma_t = np.pi/4*self.molecule_d**2  # collision crossection
         number_density = 1/self.kn/sigma_t/self.tube_d
         c_m = np.sqrt(2*KB*self.freestream_temp/self.m)
-        v_bar = np.dot(self.freestream_vel, surf_normal)
-        s_n = (np.dot(v_bar, surf_normal)/c_m)[0]  # A.26
+        v_bar = np.dot(self.freestream_vel, self.surf_normal)
+        s_n = (np.dot(v_bar, self.surf_normal)/c_m)[0]  # A.26
         f_n = number_density*c_m/2 / \
             np.sqrt(np.pi)*(np.exp(-s_n**2) + np.sqrt(np.pi)
                             * s_n*(1 + special.erf(s_n)))  # A.27
         # particle inflow
-        real_particles_per_timestep = np.ceil(f_n*self.dt*inlet_a)  # A.28
+        real_particles_per_timestep = np.ceil(f_n*self.dt*self.inlet_a)  # A.28
         wp = real_particles_per_timestep/self.particles_per_timestep  # weighting factor
 
         # output grid info
@@ -187,7 +107,7 @@ class CASE_TPMC:
 
         # initalize variables
         col_names = np.array([['rx1', 'ry1', 'rz1', 'rx2', 'ry2', 'rz2', 'vx', 'vy',
-                             'vz', 'bvx', 'bvy', 'bvz', 'm', 'mol_diam', 'has_particle']], dtype=object)
+                             'vz', 'bvx', 'bvy', 'bvz', 'm', 'mol_diam', 'has_particle','cell_id']], dtype=object)
         self.particles = np.concatenate((col_names, np.zeros(
             [self.num_particles, np.size(col_names)])), axis=0)
         # r1 is the current position, r2 is the old position
@@ -197,13 +117,14 @@ class CASE_TPMC:
         removed_particles_outlet = []
 
         # particle variable indices
-        self.posn_1 = slice(0, 3)
+        self.posn_1 = slice(0, 3) # current position
         self.posn_2 = slice(3, 6)
         self.vel = slice(6, 9)
         self.bulk_vel = slice(9, 12)
         self.m = 12
         self.mol_diam = 13
         self.has_particle = 14
+        self.cell_id = 15
 
         i = 1  # timestep index
         self.removed = 0  # initalize number of removed particle objects
@@ -235,10 +156,10 @@ class CASE_TPMC:
             self.removed_outlet = 0
             self.removed_inlet = 0
             # pressure matrix for current timestep
-            self.pres = [[] for x in np.arange(0, no_wall_elems)]
-            self.ener = [0]*no_wall_elems  # thermal energy matrix
+            self.pres = [[] for x in np.arange(0, self.no_wall_elems)]
+            self.ener = [0]*self.no_wall_elems  # thermal energy matrix
             # pressure matrix for current timestep
-            self.axial_stress = [[] for x in np.arange(0, no_wall_elems)]
+            self.axial_stress = [[] for x in np.arange(0, self.no_wall_elems)]
 
             # print(f'Checking Particle {p}')
             # propogating particles
@@ -249,6 +170,9 @@ class CASE_TPMC:
             # find particle entries that exist
             extant_particles = np.nonzero(self.particles[1:-1, -1])[0]
             self.particle_index = np.add(extant_particles, 1)
+
+            # update collision cell indices for each particle
+            self.update_collision_cell()
 
             # loop over particles to find wall collisions
             # this should be a subset of particles that are near the wall
@@ -297,12 +221,119 @@ class CASE_TPMC:
             print(f"Timestep Time: {time.perf_counter() - timestep_time}")
             i += 1  # add to timestep index, continue to next timestep
 
+    def update_collision_cell(self):
+        """determine what collision cell each particle is in"""
+        y_dim = self.coll_cells[1].__len__()
+        z_dim = self.coll_cells[2].__len__()
+
+        for p in self.particle_index:
+            ind = np.zeros([1,3])[0]
+            for i in [0,1,2]:
+                ind[i] = (self.particles[p][i] - self.coll_cells[i]).argmin()
+            self.particles[p][self.cell_id] = ind[0]*y_dim*z_dim + ind[1]*z_dim + ind[2] # pattern to determine what cell the particle is located in
+
+
+    def process_grid(self):
+        """generate grid information and collision cell to wall cell connectivity
+        """
+        # Mesh Info
+        self.wall_grid = read_stl(os.path.join(self.geometry_dir,self.wall_grid_name))
+        self.inlet_grid = read_stl(os.path.join(self.geometry_dir,self.inlet_grid_name))
+        self.outlet_grid = read_stl(os.path.join(self.geometry_dir,self.outlet_grid_name))
+        self.surf_normal = np.array([1, 0, 0]) # TODO un-jankify this, should not be hard coded
+        self.no_wall_elems = np.shape(self.wall_grid.centroids)[0]
+        # grid info
+        self.inlet_a = 0 # inlet area
+        for c in self.inlet_grid.areas:
+            self.inlet_a = self.inlet_a + c
+
+
+
+        # create collision cells
+        self.coll_cells = [[], [], []]  # list of grids in each direction
+        for i in [0, 1, 2]:
+            # length of coll cell domain in each dir
+            dir_len = self.wall_grid.max_[i] - self.wall_grid.min_[i]
+            # number of divisions in each direction
+            n_divs = np.floor(dir_len/self.coll_cell_width).astype(int)
+            self.coll_cells[i] = np.linspace(self.wall_grid.min_[
+                                        i] + self.coll_cell_width/2, self.wall_grid.max_[i] - self.coll_cell_width/2, n_divs)
+        num_coll_cells = self.coll_cells[0].__len__(
+        )*self.coll_cells[1].__len__()*self.coll_cells[2].__len__()
+
+
+
+        self.coll_cell_centroid = np.zeros([num_coll_cells, 3])
+        c = 0
+        for x in np.arange(0, self.coll_cells[0].__len__()):
+            for y in np.arange(0, self.coll_cells[1].__len__()):
+                for z in np.arange(0, self.coll_cells[2].__len__()):
+                    self.coll_cell_centroid[c, :] = np.array(
+                        [self.coll_cells[0][x], self.coll_cells[1][y], self.coll_cells[2][z]])
+                    c += 1
+
+        # check if this grid has already been processed
+        pkl_check = os.path.join(self.geometry_dir,self.wall_grid_name[:-4]+f"_{self.coll_cell_width}"+'.wc_cc_info')
+        if os.path.exists(pkl_check ):
+            f = open(pkl_check, 'rb')
+            self.cc_intersctions = pickle.load(f)
+            return
+
+        # find what cc intersect element planes
+        self.cc_intersctions = [[]]*num_coll_cells
+        corners = np.zeros([8,3])
+        cid = 0
+        for cc in self.coll_cell_centroid:
+            elem_list = [] # list to store element ids
+            dx = self.coll_cell_width
+            # corners of box
+            corners[0, :] = np.array(
+                [cc[0] + dx/2, cc[1] + dx/2, cc[2] + dx/2])
+            corners[1, :] = np.array(
+                [cc[0] + dx/2, cc[1] + dx/2, cc[2] - dx/2])
+            corners[2, :] = np.array(
+                [cc[0] + dx/2, cc[1] - dx/2, cc[2] + dx/2])
+            corners[3, :] = np.array(
+                [cc[0] + dx/2, cc[1] - dx/2, cc[2] - dx/2])
+            corners[4, :] = np.array(
+                [cc[0] - dx/2, cc[1] + dx/2, cc[2] + dx/2])
+            corners[5, :] = np.array(
+                [cc[0] - dx/2, cc[1] + dx/2, cc[2] - dx/2])
+            corners[6, :] = np.array(
+                [cc[0] - dx/2, cc[1] - dx/2, cc[2] + dx/2])
+            corners[7, :] = np.array(
+                [cc[0] - dx/2, cc[1] - dx/2, cc[2] - dx/2])
+            for wc in np.arange(np.shape(self.wall_grid.centroids)[0]):
+                normal_comp = np.zeros([1,8])[0]
+                g = 0 # corner index
+                for i in corners: # check this loops over the xyz points
+                    cell_n = self.wall_grid.normals[wc]
+                    # transform positions to new basis
+                    cent = self.wall_grid.centroids[wc]
+                    normal_comp[g] = cell_n.dot(cent - i) # normal component to wall cell
+                    g+=1
+                # check if cell intersects plane of cell
+                if not (normal_comp == 1).all() or (normal_comp == -1).all() or (normal_comp == 0).any():
+                    pts = self.wall_grid.points[wc].reshape(3, 3)
+                    edge_len = np.max([np.linalg.norm(
+                        pts[0] - pts[1]), np.linalg.norm(pts[1] - pts[2]), np.linalg.norm(pts[0] - pts[2])]) # max edge length of cell
+                    for i in corners:
+                        if edge_len > np.linalg.norm(i - self.wall_grid.centroids[wc]):
+                            elem_list.append(wc)
+                            break
+            self.cc_intersctions[cid] = elem_list
+            cid+=1
+
+        # pickle this file since it takes forever
+        with open(pkl_check, 'wb') as f:
+            pickle.dump(self.cc_intersctions, f)
+
     def wall_collisions(self):
 
         for p in self.particle_index:
 
-            # detect wall collisions by looping over cells
-            for c in np.arange(np.shape(self.wall_grid.centroids)[0]):
+            # detect wall collisions by looping over wall elements associated with collision cell
+            for c in self.cc_intersctions[self.particles[p][self.cell_id].astype(int)]:
                 # create element basis centered on centroid
                 cell_n = self.wall_grid.normals[c]
                 # transform positions to new basis
@@ -372,6 +403,7 @@ class CASE_TPMC:
         particle_data = np.append(particle_data, self.molecule_d)
         # set flag to 1 to show particle does exist
         particle_data = np.append(particle_data, 1)
+        particle_data = np.append(particle_data, np.nan)
 
         return particle_data
 
