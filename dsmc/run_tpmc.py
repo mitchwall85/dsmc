@@ -33,8 +33,8 @@ molecule_d = 364e-12 # [m]
 # grids names ( must be continuous when assemebled)
 geometry_dir = r"/home/mitch/odrive-agent-mount/OneDrive For Business/CUBoulder/ASEN6061/geometry"
 wall_grid_name   = r"square_scaline_wall_v1.stl"
-inlet_grid_name  = r"square_scaline_inlet_v1.stl"
-outlet_grid_name = r"square_scaline_outlet_v1.stl"
+inlet_grid_name  = r"square_scaline_inlet_v2.stl"
+outlet_grid_name = r"square_scaline_outlet_v2.stl"
 
 # Post processing parameters
 pct_window = 0.2 # check last n% of simulation
