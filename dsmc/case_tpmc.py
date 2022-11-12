@@ -1,4 +1,5 @@
 
+from random import random
 from turtle import pos, st
 import numpy as np
 from particle import PARTICLE
@@ -6,7 +7,7 @@ from postprocess import POST_PROCESS
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from stl import mesh
-from utilities import KB, read_stl, in_element, start_postproc, gen_posn, gen_velocity, AVOS_NUM, make_directory
+from utilities import KB, read_stl, in_element, start_postproc, gen_posn, gen_velocity, AVOS_NUM, make_directory, plot_walls
 from scipy.spatial.transform import Rotation as R
 from scipy import special
 import sys
@@ -51,7 +52,7 @@ class CASE_TPMC:
         # freestream conditions
         self.freestream_temp = freestream_temp  # k
         self.kn = kn
-        self.m = m  # mass of a N2 molecule [kg]
+        self.mass = m  # mass of a N2 molecule [kg]
         self.molecule_d = molecule_d  # [m]
 
         # grids names ( must be continuous when assemebled)
@@ -75,6 +76,11 @@ class CASE_TPMC:
         # process grid and create connectivity from collision cells to wall emenets
         self.process_grid()
 
+        # initalize some variables
+        self.removed = 0  # initalize number of removed particle objects
+        self.removed_outlet = 0
+        self.removed_inlet = 0
+
     def execute_case(self):
         ############################
         # loop over DSMC model
@@ -83,53 +89,28 @@ class CASE_TPMC:
         # number flux
         sigma_t = np.pi/4*self.molecule_d**2  # collision crossection
         number_density = 1/self.kn/sigma_t/self.tube_d
-        c_m = np.sqrt(2*KB*self.freestream_temp/self.m)
+        self.c_m = np.sqrt(2*KB*self.freestream_temp/self.mass)
         v_bar = np.dot(self.freestream_vel, self.surf_normal)
-        s_n = (np.dot(v_bar, self.surf_normal)/c_m)[0]  # A.26
-        f_n = number_density*c_m/2 / \
+        s_n = (np.dot(v_bar, self.surf_normal)/self.c_m)[0]  # A.26
+        f_n = number_density*self.c_m/2 / \
             np.sqrt(np.pi)*(np.exp(-s_n**2) + np.sqrt(np.pi)
                             * s_n*(1 + special.erf(s_n)))  # A.27
         # particle inflow
         real_particles_per_timestep = np.ceil(f_n*self.dt*self.inlet_a)  # A.28
         wp = real_particles_per_timestep/self.particles_per_timestep  # weighting factor
 
-        # output grid info
-        # TODO does not generatlze to non-x normal surfaces
-        self.n_0 = self.inlet_grid.points[0][0]
-        # TODO does not generatlze to non-x normal surfaces
-        self.n_l = self.outlet_grid.points[0][0]
-        dx = (self.n_l-self.n_0)/self.cylinder_grids
-        output_grids = np.vstack([np.linspace(self.n_0 + dx/2, self.n_l - dx/2, self.cylinder_grids),
-                                 np.zeros(self.cylinder_grids), np.zeros(self.cylinder_grids)])
         # create output class
         post_proc = POST_PROCESS(
-            output_grids, self.wall_grid, wp, self.dt, self.output_dir)
+            self.output_grids, self.wall_grid, wp, self.dt, self.output_dir)
 
-        # initalize variables
-        col_names = np.array([['rx1', 'ry1', 'rz1', 'rx2', 'ry2', 'rz2', 'vx', 'vy',
-                             'vz', 'bvx', 'bvy', 'bvz', 'm', 'mol_diam', 'has_particle','cell_id']], dtype=object)
-        self.particles = np.concatenate((col_names, np.zeros(
-            [self.num_particles, np.size(col_names)])), axis=0)
-        # r1 is the current position, r2 is the old position
+        self.generate_particle_array(self.num_particles)
+
         # 2d list for plotting removed particles
         removed_particles_time = [[], []]
         removed_particles_inlet = []
         removed_particles_outlet = []
 
-        # particle variable indices
-        self.posn_1 = slice(0, 3) # current position
-        self.posn_2 = slice(3, 6)
-        self.vel = slice(6, 9)
-        self.bulk_vel = slice(9, 12)
-        self.m = 12
-        self.mol_diam = 13
-        self.has_particle = 14
-        self.cell_id = 15
-
         i = 1  # timestep index
-        self.removed = 0  # initalize number of removed particle objects
-        self.removed_outlet = 0
-        self.removed_inlet = 0
         # start by not post processing results until convergence criteria reached
         start_post = False
         while i < self.t_steps:
@@ -142,7 +123,7 @@ class CASE_TPMC:
             particle_gen_time = time.perf_counter()
             for n in np.arange(0, self.particles_per_timestep):
                 # TODO formulate for general inlet plane orientation
-                v = gen_velocity(self.freestream_vel, c_m, s_n)
+                v = gen_velocity(self.freestream_vel, self.c_m, s_n)
                 r = gen_posn(self.inlet_grid)
                 # create list of inputs for particle
                 new_particle = self.create_particle(r, v)
@@ -168,8 +149,8 @@ class CASE_TPMC:
                                                              self.vel]*self.dt + self.particles[1:, self.posn_2]
 
             # find particle entries that exist
-            extant_particles = np.nonzero(self.particles[1:-1, -1])[0]
-            self.particle_index = np.add(extant_particles, 1)
+            self.extant_particles = np.nonzero(self.particles[1:, self.has_particle])[0]
+            self.particle_index = np.add(self.extant_particles, 1)
 
             # update collision cell indices for each particle
             self.update_collision_cell()
@@ -191,13 +172,7 @@ class CASE_TPMC:
                                              removed_particles_inlet, self.average_window)  # dont hardcode this value
 
             # print status to terminal
-            print(
-                f"--------------------------------------------------------------------------")
-            print(f'Particles removed: {self.removed}')
-            print(f"Total Time: {i*self.dt}")
-            print(f"Time Steps: {100*(i)/self.t_steps} %")
-            # TODO fix this since it doesnt work with the preallocated version
-            print(f"Particles in Domain: {extant_particles.__len__()}")
+            self.print_status(i, self.extant_particles)
 
             # detect if steady state is reached and if post processing should start
             if not start_post:
@@ -221,6 +196,113 @@ class CASE_TPMC:
             print(f"Timestep Time: {time.perf_counter() - timestep_time}")
             i += 1  # add to timestep index, continue to next timestep
 
+    def print_status(self, i, extant_particles):
+        """display timestep status to terminal
+        """
+        print(
+        f"--------------------------------------------------------------------------")
+        print(f'Particles removed: {self.removed}')
+        print(f"Total Time: {i*self.dt}")
+        print(f"Time Steps: {100*(i)/self.t_steps} %")
+        # TODO fix this since it doesnt work with the preallocated version
+        print(f"Particles in Domain: {extant_particles.__len__()}")
+
+
+    def generate_particle_array(self, dim: int):
+        """_summary_
+        """
+        # initalize variables
+        col_names = np.array([['rx1', 'ry1', 'rz1', 'rx2', 'ry2', 'rz2', 'vx', 'vy',
+                             'vz', 'bvx', 'bvy', 'bvz', 'm', 'mol_diam', 'has_particle','cell_id']], dtype=object)
+        self.particles = np.concatenate((col_names, np.zeros(
+            [dim, np.size(col_names)])), axis=0)
+        # r1 is the current position, r2 is the old position
+
+        # particle variable indices
+        self.posn_1 = slice(0, 3) # current position
+        self.posn_2 = slice(3, 6)
+        self.vel = slice(6, 9)
+        self.bulk_vel = slice(9, 12)
+        self.m = 12
+        self.mol_diam = 13
+        self.has_particle = 14
+        self.cell_id = 15
+
+    def test_visualization(self, vis_particles):
+        """_summary_
+
+        Args:
+            num_particles (_type_): _description_
+        """
+
+        self.generate_particle_array(vis_particles)
+
+        self.pres = [[] for x in np.arange(0, self.no_wall_elems)]
+        self.ener = [0]*self.no_wall_elems  # thermal energy matrix
+        # pressure matrix for current timestep
+        self.axial_stress = [[] for x in np.arange(0, self.no_wall_elems)]
+        self.c_m = 2 # temp value
+
+        for n in np.arange(1, vis_particles+1):
+            # TODO formulate for general inlet plane orientation
+            v = gen_velocity(100, self.c_m, 0) # TODO find fake values of c_m and s_n
+            # v = np.array([200,20,0])
+            r = gen_posn(self.inlet_grid)
+            # r = np.array([0,0,0]) 
+            # create list of inputs for particle
+            self.particles[n, :] = self.create_particle(r, v)
+
+        i = 1  # timestep index
+        posn_hist = [np.empty((1,3))]*vis_particles
+        while i < self.t_steps:
+
+            # propogating particles TODO make this a function later?
+            self.particles[1:, self.posn_2] = self.particles[1:, self.posn_1]
+            self.particles[1:, self.posn_1] = self.particles[1:,
+                                                             self.vel]*self.dt + self.particles[1:, self.posn_2]
+
+            # print(f"Posn: {self.particles[1][self.posn_1]}")
+
+            # find particle entries that exist
+            self.extant_particles = np.nonzero(self.particles[1:, self.has_particle])[0]
+            self.particle_index = np.add(self.extant_particles, 1)
+
+            # update collision cell indices for each particle
+            self.update_collision_cell()
+
+            # loop over particles to find wall collisions
+            self.wall_collisions()
+
+            # save particle position. this missed the wall collision location if a wall collision happens
+            pid = 0
+            for p in self.particle_index:
+                posn_hist[p-1] = np.vstack([posn_hist[p-1], self.particles[p][self.posn_2], self.particles[p][self.posn_1]])
+                pid+=1
+
+                if np.abs(self.particles[p][self.posn_2][1]) > 0.005 and np.abs(self.particles[p][self.posn_2][2]) > 0.005:
+                    a = 1
+
+            # end simulation when all particles have left
+            if self.removed == vis_particles:
+                break 
+
+            # print status to terminal
+            self.print_status(i, self.extant_particles)
+
+            i+=1
+
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        for p in np.arange(0, vis_particles):
+            ax.plot3D(posn_hist[p][:,0].astype(float), posn_hist[p][:,1].astype(float), posn_hist[p][:,2].astype(float), marker=".")
+        plot_walls(ax, self.wall_grid)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        fig.savefig('temp.png')
+        plt.show()
+
+
     def update_collision_cell(self):
         """determine what collision cell each particle is in"""
         y_dim = self.coll_cells[1].__len__()
@@ -229,13 +311,14 @@ class CASE_TPMC:
         for p in self.particle_index:
             ind = np.zeros([1,3])[0]
             for i in [0,1,2]:
-                ind[i] = (self.particles[p][i] - self.coll_cells[i]).argmin()
+                ind[i] = np.abs((self.particles[p][self.posn_1][i]  - self.coll_cells[i])).argmin()
             self.particles[p][self.cell_id] = ind[0]*y_dim*z_dim + ind[1]*z_dim + ind[2] # pattern to determine what cell the particle is located in
 
 
     def process_grid(self):
         """generate grid information and collision cell to wall cell connectivity
         """
+
         # Mesh Info
         self.wall_grid = read_stl(os.path.join(self.geometry_dir,self.wall_grid_name))
         self.inlet_grid = read_stl(os.path.join(self.geometry_dir,self.inlet_grid_name))
@@ -247,7 +330,15 @@ class CASE_TPMC:
         for c in self.inlet_grid.areas:
             self.inlet_a = self.inlet_a + c
 
-
+        # output grid info
+        # TODO does not generatlze to non-x normal surfaces
+        self.n_0 = self.inlet_grid.points[0][0]
+        # TODO does not generatlze to non-x normal surfaces
+        self.n_l = self.outlet_grid.points[0][0]
+        dx = (self.n_l-self.n_0)/self.cylinder_grids
+        self.output_grids = np.vstack([np.linspace(self.n_0 + dx/2, self.n_l - dx/2, self.cylinder_grids),
+                                 np.zeros(self.cylinder_grids), np.zeros(self.cylinder_grids)])
+        
 
         # create collision cells
         self.coll_cells = [[], [], []]  # list of grids in each direction
@@ -331,44 +422,51 @@ class CASE_TPMC:
     def wall_collisions(self):
 
         for p in self.particle_index:
+            dt_fract = self.dt
+            is_collided = True
+            while is_collided: # keep colliding with wall while particle has time left in the current timestep
+                is_collided = False
+                # detect wall collisions by looping over wall elements associated with collision cell
+                for c in self.cc_intersctions[self.particles[p][self.cell_id].astype(int)]:
+                    # create element basis centered on centroid
+                    cell_n = self.wall_grid.normals[c]
+                    # transform positions to new basis
+                    cent = self.wall_grid.centroids[c]
+                    cell_n_i = cell_n.dot(cent - self.particles[p][self.posn_2])
+                    cell_n_f = cell_n.dot(cent - self.particles[p][self.posn_1])
+                    if np.sign(cell_n_f) != np.sign(cell_n_i) and cell_n_i != 0.0: # try something like this later np.isclose(cell_n_i, 0, 1e-6
+                        # saves time by moving this here
+                        cell_n_mag = np.linalg.norm(self.wall_grid.normals[c])
+                        cell_n_i = cell_n_i/cell_n_mag
+                        cell_n_f = cell_n_f/cell_n_mag
 
-            # detect wall collisions by looping over wall elements associated with collision cell
-            for c in self.cc_intersctions[self.particles[p][self.cell_id].astype(int)]:
-                # create element basis centered on centroid
-                cell_n = self.wall_grid.normals[c]
-                # transform positions to new basis
-                cent = self.wall_grid.centroids[c]
-                cell_n_i = cell_n.dot(cent - self.particles[p][self.posn_2])
-                cell_n_f = cell_n.dot(cent - self.particles[p][self.posn_1])
-                if np.sign(cell_n_f) != np.sign(cell_n_i):
-                    # saves time by moving this here
-                    cell_n_mag = np.linalg.norm(self.wall_grid.normals[c])
-                    cell_n_i = cell_n_i/cell_n_mag
-                    cell_n_f = cell_n_f/cell_n_mag
+                        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+                        intersect = self.particles[p][self.posn_2] + \
+                            pct_vect*self.dt*self.particles[p][self.vel]
 
-                    pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-                    intersect = self.particles[p][self.posn_2] + \
-                        pct_vect*self.dt*self.particles[p][self.vel]
+                        if in_element(self.wall_grid.points[c], cell_n, intersect):
+                            # specular reflection
+                            if np.random.rand(1) > self.alpha:
+                                is_collided = True
+                                dm, dt_fract = self.reflect_specular(
+                                    p, cell_n, cell_n_i, cell_n_f, dt_fract)
+                            # diffuse reflection
+                            else:
+                                dm, de, dt_fract = self.reflect_diffuse(
+                                    p, cell_n, cell_n_i, cell_n_f, dt_fract)
+                                # energy change
+                                # self.ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
+                            # pressure contribution from reflection
+                            # not a very clevery way to get normal compoent
+                            # pres_scalar = np.linalg.norm(
+                                # dm[1:3]/self.dt/self.wall_grid.areas[c])
+                            # self.pres[c].append(pres_scalar)
+                            # axial pressure contribution from reflection
+                            # axial_stress_scalar = np.linalg.norm(
+                                # dm[0]/self.dt/self.wall_grid.areas[c])
+                            # self.axial_stress[c].append(axial_stress_scalar)
+                            break # dont loop over other wall elements if a collison happens
 
-                    # TODO precalculate volume cell associativity with wall cells so the cell wall detection only needs to happen a few times.
-                    if in_element(self.wall_grid.points[c], cell_n, intersect):
-                        if np.random.rand(1) > self.alpha:
-                            dm = self.reflect_specular(
-                                p, cell_n, cell_n_i, cell_n_f)
-                        # TODO fix diffuse reflection function
-                        # else:
-                        #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
-                        #     # energy change
-                        #     self.ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
-                        # pressure contribution from reflection
-                        # not a very clevery way to get normal compoent
-                        pres_scalar = np.linalg.norm(
-                            dm[1:3]/self.dt/self.wall_grid.areas[c])
-                        self.pres[c].append(pres_scalar)
-                        # axial pressure contribution from reflection
-                        axial_stress_scalar = np.linalg.norm(
-                            dm[0]/self.dt/self.wall_grid.areas[c])
-                        self.axial_stress[c].append(axial_stress_scalar)
 
             # particle_remove_time = time.perf_counter()
             if self.exit_domain_outlet(p):
@@ -399,7 +497,7 @@ class CASE_TPMC:
         particle_data = np.append(r, [0, 0, 0])
         particle_data = np.append(particle_data, v)
         particle_data = np.append(particle_data, self.freestream_vel)
-        particle_data = np.append(particle_data, self.m)
+        particle_data = np.append(particle_data, self.mass)
         particle_data = np.append(particle_data, self.molecule_d)
         # set flag to 1 to show particle does exist
         particle_data = np.append(particle_data, 1)
@@ -407,7 +505,7 @@ class CASE_TPMC:
 
         return particle_data
 
-    def reflect_specular(self, p, wall_n: np.array, cell_n_i, cell_n_f):
+    def reflect_specular(self, p, wall_n: np.array, cell_n_i, cell_n_f, dt):
         """calculate the reflected velocity for a specular wall impact
         Args:
             p (np.array): particle index
@@ -417,13 +515,13 @@ class CASE_TPMC:
         """
 
         pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-        # intersect = self.posn_hist[-2] + pct_vect*dt*self.vel
+        # intersection of wall with wall element
         intersect = self.particles[p][self.posn_2] + \
-            pct_vect*self.dt*self.particles[p][self.vel]
+            pct_vect*dt*self.particles[p][self.vel]
 
         # ensure wall vector is a unit vector
         wall_n = wall_n/np.linalg.norm(wall_n)
-        v0 = self.particles[p][self.vel]
+        v0 = self.particles[p][self.vel].astype(float)
         # normal component to wall
         c_n = np.dot(self.particles[p][self.vel], wall_n)*wall_n
         # perpendicular component to wall
@@ -435,12 +533,59 @@ class CASE_TPMC:
         # create copy of vector
         # collision location
         self.particles[p][self.posn_2] = intersect
+        dt = dt*(1 - pct_vect)
         # post - collision location
         # update position with fraction of remaining timestep
         self.particles[p][self.posn_1] = intersect + \
-            self.dt*(1 - pct_vect)*self.particles[p][self.vel]
+            dt*self.particles[p][self.vel]
 
-        return dm
+        return dm, dt
+
+    def reflect_diffuse(self, p, wall_n: np.array, cell_n_i, cell_n_f, dt: float):
+        """_summary_
+        Args:
+            wall_n (np.array): _description_
+            dt (float): _description_
+            tube_d (_type_): _description_
+            cell_n_i (_type_): _description_
+            cell_n_f (_type_): _description_
+        """
+
+        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+        intersect = self.particles[p][self.posn_2] + \
+            pct_vect*dt*self.particles[p][self.vel]
+        
+        # ensure wall vector is a unit vector
+        wall_n = wall_n/np.linalg.norm(wall_n)
+        # random vector for generating normals
+        gen_vect = True
+        while gen_vect:
+            random_vect = np.random.rand(3)
+            random_vect = random_vect/np.linalg.norm(random_vect)
+            wall_t = np.cross(wall_n, random_vect) # find tangential vector to surface
+            if (wall_t == np.array([0,0,0])).all(): # make sure the vector is not zero
+                continue
+            else:
+                gen_vect = False
+
+        wall_b = np.cross(wall_n, wall_t)/np.linalg.norm(np.cross(wall_n, wall_t)) # find a third basis vector for the cell csys
+
+        # find cell csys velocity
+        v0 = self.particles[p][self.vel].astype(float)
+        zero_bulk = np.array([0 ,0, 0])
+        cell_vel = gen_velocity(zero_bulk , np.sqrt(self.t_tw)*self.c_m, 0) # c_m scaled and s_n = 0. Velcity in cell csys
+        self.particles[p][self.vel] = cell_vel[0]*wall_n + cell_vel[1]*wall_t + cell_vel[2]*wall_b # normal velocity with X in the cell_normal direction
+        dm = self.particles[p][self.m]*(self.particles[p][self.vel] - v0) # change in momentum from wall collission
+        de = 0.5*self.particles[p][self.m]*np.linalg.norm(self.particles[p][self.vel])**2 - np.linalg.norm(v0)**2 # only needed for diffuse, this is zero for specular
+
+        # wall_intersection
+        self.particles[p][self.posn_2] = intersect
+        dt = dt*(1 - pct_vect)
+        # new position
+        self.particles[p][self.posn_1] = intersect + \
+            dt*self.particles[p][self.vel]
+
+        return dm, de, dt
 
     def exit_domain_inlet(self, p: int):
         """ Checks if particle has left through inlet

@@ -129,3 +129,16 @@ def make_directory(dir_name: str):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
 
+def plot_walls(ax, grid):
+    a = 1
+    num_pts = grid.points.shape[0]
+    pts = np.zeros([num_pts*3, 3])
+    c = 0
+    for p in np.arange(0,num_pts):
+        for i in [0,1,2]:
+            pts[c,:] = grid.points[p,i*3:i*3+3]
+            c+=1
+    
+    ax.scatter3D(pts[:,0], pts[:,1], pts[:,2], c='r')
+
+
