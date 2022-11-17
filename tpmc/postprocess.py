@@ -222,15 +222,15 @@ class POST_PROCESS:
         plt.savefig(f"{output_dir}/ttw{t_tw}_alp{alpha}_pressure.png")
         plt.close()
 
-    def plot_removed_particles(self, removed_particles_time, removed_outlet, removed_inlet, average_window):
+    def plot_removed_particles(self, removed_particles_time, removed_outlet, removed_inlet):
         removed_particles_avg = [[],[]]
         removed_inlet_avg = []
         removed_outlet_avg = []
-        for w in np.arange(average_window,removed_particles_time[0].__len__()):
+        for w in np.arange(self.average_window,removed_particles_time[0].__len__()):
             removed_particles_avg[0].append(removed_particles_time[0][w]) 
-            removed_particles_avg[1].append(np.mean(removed_particles_time[1][w-average_window:w])) 
-            removed_inlet_avg.append(np.mean(removed_inlet[w-average_window:w])) 
-            removed_outlet_avg.append(np.mean(removed_outlet[w-average_window:w])) 
+            removed_particles_avg[1].append(np.mean(removed_particles_time[1][w-self.average_window:w])) 
+            removed_inlet_avg.append(np.mean(removed_inlet[w-self.average_window:w])) 
+            removed_outlet_avg.append(np.mean(removed_outlet[w-self.average_window:w])) 
 
         plt.clf()
         plt.plot(removed_particles_avg[0], removed_particles_avg[1], label='Total Removed')

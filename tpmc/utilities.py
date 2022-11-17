@@ -130,9 +130,16 @@ def gen_posn(grid): # whats the type hint here?
 
     return np.array([0, y[0], z[0]])
 
+def gen_posn_3d(dx, x, dy, y, dz, z): # janky function for generating position in a 3d box
+
+    return np.array([np.random.rand()*dx + x, np.random.rand()*dy + y, np.random.rand()*dz + z])
+
 def make_directory(dir_name: str):
     """makes directory if it does not already exist"""
 
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
+
+def plot_walls(ax, wall_grid):
+    a = 1
 

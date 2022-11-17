@@ -25,7 +25,7 @@ class CASE_TPMC:
     def __init__(self, case_name: str, dt: float, t_steps: int, particles_per_timestep: int, freestream_vel: np.array, \
         alpha: float, t_tw: float, tube_d: float, freestream_temp: float, kn: float, m: float, molecule_d: \
         float, wall_grid_name: str, inlet_grid_name: str, outlet_grid_name: str, pct_window: float, \
-        pp_tolerance: float, cylinder_grids: int, output_dir: float, average_window: int, plot_freq: int ):
+        pp_tolerance: float, cylinder_grids: int, output_dir: float, average_window: int, plot_freq: int, num_particles: int):
 
         self.case_name = case_name
         # specular neutral wall
@@ -39,6 +39,9 @@ class CASE_TPMC:
 
         # tube geom
         self.tube_d = tube_d # TODO replace this with just a reference length, I think thats all its used for
+        
+        # preallocate particle array
+        self.num_particles = num_particles
 
         # freestream conditions
         self.freestream_temp = freestream_temp # k
@@ -98,7 +101,9 @@ class CASE_TPMC:
         post_proc = POST_PROCESS(output_grids, wall_grid, wp, self.dt)
 
         # initalize variables
-        particles = np.array(['rx1','ry1','rz1','rx2','ry2','rz2','vx','vy','vz','bvx','bvy','bvz','m','mol_diam',], dtype=object)
+        col_names = np.array([['rx1', 'ry1', 'rz1', 'rx2', 'ry2', 'rz2', 'vx', 'vy',
+                             'vz', 'bvx', 'bvy', 'bvz', 'm', 'mol_diam', 'has_particle']], dtype=object)
+        particles = np.concatenate((col_names, np.zeros([self.num_particles, np.size(col_names)])), axis = 0)
         # r1 is the current position, r2 is the old position
         removed_particles_time = [[],[]] # 2d list for plotting removed particles
         removed_particles_inlet = []
@@ -111,6 +116,7 @@ class CASE_TPMC:
         bulk_vel = slice(9, 12)
         m = 12
         mol_diam = 13
+        has_particle = 14
 
         i = 1 # timestep index
         removed = 0 # initalize number of removed particle objects
@@ -119,16 +125,18 @@ class CASE_TPMC:
         start_post = False # start by not post processing results until convergence criteria reached
         while i < self.t_steps:
             timestep_time = time.perf_counter()
+
+            empty_entries = np.nonzero(particles[1:-1,-1] - 1)[0] # zero entries where a particles can be inserted
             # generate particles for each timestep
+            # this should die if there are not enough open spots for partices
             for n in np.arange(0,self.particles_per_timestep):
                 v = gen_velocity(self.freestream_vel, c_m, s_n) # TODO formulate for general inlet plane orientation
                 r = gen_posn(inlet_grid)
                 # create list of inputs for particle
                 new_particle = self.create_particle(r, v)
-                particles = np.vstack([particles,new_particle])
+                index = empty_entries[n] + 1
+                particles[index,:] = new_particle # add particle to particle array
 
-
-            p = 1 # start at 1 since first row is lables
             removed = 0
             removed_outlet = 0
             removed_inlet = 0
@@ -140,60 +148,60 @@ class CASE_TPMC:
             particles[1:,posn_2] = particles[1:,posn_1]
             particles[1:,posn_1] = particles[1:,vel]*self.dt + particles[1:,posn_2]
 
-            while p < np.shape(particles)[0]:
+            extant_particles = np.nonzero(particles[1:-1,-1])[0] # find particle entries that exist
+            particle_index = np.add(extant_particles, 1)
+            for p in particle_index:
 
                 # detect wall collisions by looping over cells
                 collision_detect_time = time.perf_counter()
                 for c in np.arange(np.shape(wall_grid.centroids)[0]):
-                    # create element basis centered on centroid
-                    cell_n = wall_grid.normals[c]
-                    # transform positions to new basis
-                    cent = wall_grid.centroids[c]
-                    cell_n_i = cell_n.dot(cent - particles[p][posn_2])
-                    cell_n_f = cell_n.dot(cent - particles[p][posn_1])
-                    if np.sign(cell_n_f) != np.sign(cell_n_i):
-                        cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
-                        cell_n_i = cell_n_i/cell_n_mag
-                        cell_n_f = cell_n_f/cell_n_mag
+                    a = 1
+                        # create element basis centered on centroid
+                        cell_n = wall_grid.normals[c]
+                        # transform positions to new basis
+                        cent = wall_grid.centroids[c]
+                        cell_n_i = cell_n.dot(cent - particles[p][posn_2])
+                        cell_n_f = cell_n.dot(cent - particles[p][posn_1])
+                        if np.sign(cell_n_f) != np.sign(cell_n_i):
+                            cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
+                            cell_n_i = cell_n_i/cell_n_mag
+                            cell_n_f = cell_n_f/cell_n_mag
 
-                        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-                        intersect = particles[p][posn_2] + pct_vect*self.dt*particles[p][vel]
+                            pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+                            intersect = particles[p][posn_2] + pct_vect*self.dt*particles[p][vel]
 
-                        if in_element(wall_grid.points[c], cell_n, intersect):
-                            if np.random.rand(1) > self.alpha:
-                                dm, particle_reflected = self.reflect_specular( particles[p], posn_1, posn_2, vel, m, cell_n, cell_n_i, cell_n_f)
-                            particles[p] = particle_reflected
-                            # TODO fix specular reflection function
-                            # else:
-                            #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
-                            #     # energy change
-                            #     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
-                            # pressure contribution from reflection
-                            pres_scalar = np.linalg.norm(dm[1:3]/self.dt/wall_grid.areas[c]) # not a very clevery way to get normal compoent
-                            pres[c].append(pres_scalar) 
-                            # axial pressure contribution from reflection
-                            axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
-                            axial_stress[c].append(axial_stress_scalar)
+                            # TODO precalculate volume cell associativity with wall cells so the cell wall detection only needs to happen a few times.
+                            if in_element(wall_grid.points[c], cell_n, intersect):
+                                if np.random.rand(1) > self.alpha:
+                                    dm, particle_reflected = self.reflect_specular( particles[p], posn_1, posn_2, vel, m, cell_n, cell_n_i, cell_n_f)
+                                particles[p] = particle_reflected
+                                # TODO fix diffuse reflection function
+                                # else:
+                                #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
+                                #     # energy change
+                                #     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
+                                # pressure contribution from reflection
+                                pres_scalar = np.linalg.norm(dm[1:3]/self.dt/wall_grid.areas[c]) # not a very clevery way to get normal compoent
+                                pres[c].append(pres_scalar) 
+                                # axial pressure contribution from reflection
+                                axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
+                                axial_stress[c].append(axial_stress_scalar)
                 
                 # print(f"Collision Detect: {time.perf_counter() - collision_detect_time}")
 
-                exited = False # flag if partilcle gets removed
-                particle_remove_time = time.perf_counter()
+                # particle_remove_time = time.perf_counter()
+                # TODO flip the has_particle flag
                 if self.exit_domain_outlet(particles[p], posn_1, n_l):
-                        particles = np.delete(particles, p, 0)
+                        particles[p][has_particle] = 0 # flip flag to "no particle"
                         removed_outlet+=1
                         removed+=1
-                        exited = True
+                        # print(f"Particle Removal: {time.perf_counter() - particle_remove_time}")
                 if self.exit_domain_inlet(particles[p], posn_1, n_0):
-                        particles = np.delete(particles, p, 0)
+                        particles[p][has_particle] = 0 # flip flag to "no particle"
                         removed_inlet+=1
                         removed+=1
-                        exited = True
-                if exited:
-                    p-=1
-                    # print(f"Particle Removal: {time.perf_counter() - particle_remove_time}")
+                        # print(f"Particle Removal: {time.perf_counter() - particle_remove_time}")
 
-                p += 1
                         
             # find now many particles leave the domain per timestep
             removed_particles_time[0].append(i*self.dt)
@@ -208,6 +216,7 @@ class CASE_TPMC:
             print(f'Particles removed: {removed}')
             print(f"Total Time: {i*self.dt}")
             print(f"Time Steps: {100*(i)/self.t_steps} %")
+            print(f"Particles in Domain: {extant_particles.__len__()}") # TODO fix this since it doesnt work with the preallocated version
 
             # detect if steady state is reached and if post processing should start
             if not start_post:
@@ -249,6 +258,7 @@ class CASE_TPMC:
         particle_data = np.append(particle_data, self.freestream_vel)
         particle_data = np.append(particle_data, self.m)
         particle_data = np.append(particle_data, self.molecule_d)
+        particle_data = np.append(particle_data, 1) # set flag to 1 to show particle does exist
 
         return particle_data
 
