@@ -1,7 +1,5 @@
 import numpy as np
 
-from particle import PARTICLE
-
 from utilities import read_stl, gen_velocity, gen_posn, KB
 
 import matplotlib.pyplot as plt

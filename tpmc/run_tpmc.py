@@ -30,9 +30,9 @@ m = 28.0134/1000/AVOS_NUM # mass of a N2 molecule [kg]
 molecule_d = 364e-12 # [m]
 
 # grids names ( must be continuous when assemebled)
-wall_grid_name   = r"../../geometry/cylinder_d2mm_l20mm_v1.stl"
-inlet_grid_name  = r"../../geometry/cylinder_d2mm_l20mm_inlet_v1.stl"
-outlet_grid_name = r"../../geometry/cylinder_d2mm_l20mm_outlet_v1.stl"
+wall_grid_name   = r"cylinder_d2mm_l20mm_v1.stl"
+inlet_grid_name  = r"cylinder_d2mm_l20mm_inlet_v1.stl"
+outlet_grid_name = r"cylinder_d2mm_l20mm_outlet_v1.stl"
 
 # Post processing parameters
 pct_window = 0.2 # check last n% of simulation
@@ -50,7 +50,7 @@ case_1 = CASE_TPMC(case_name, dt, t_steps, particles_per_timestep, freestream_ve
 
 
 case_1.execute_case()
-case_1.readme_output()
+
 
 # tests
 random_inlet_positions(case_1, 2000)

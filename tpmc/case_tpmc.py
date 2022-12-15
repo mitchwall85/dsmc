@@ -1,7 +1,6 @@
 
 from turtle import pos, st
 import numpy as np
-from particle import PARTICLE
 from postprocess import POST_PROCESS
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -156,36 +155,36 @@ class CASE_TPMC:
                 collision_detect_time = time.perf_counter()
                 for c in np.arange(np.shape(wall_grid.centroids)[0]):
                     a = 1
-                        # create element basis centered on centroid
-                        cell_n = wall_grid.normals[c]
-                        # transform positions to new basis
-                        cent = wall_grid.centroids[c]
-                        cell_n_i = cell_n.dot(cent - particles[p][posn_2])
-                        cell_n_f = cell_n.dot(cent - particles[p][posn_1])
-                        if np.sign(cell_n_f) != np.sign(cell_n_i):
-                            cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
-                            cell_n_i = cell_n_i/cell_n_mag
-                            cell_n_f = cell_n_f/cell_n_mag
+                    # create element basis centered on centroid
+                    cell_n = wall_grid.normals[c]
+                    # transform positions to new basis
+                    cent = wall_grid.centroids[c]
+                    cell_n_i = cell_n.dot(cent - particles[p][posn_2])
+                    cell_n_f = cell_n.dot(cent - particles[p][posn_1])
+                    if np.sign(cell_n_f) != np.sign(cell_n_i):
+                        cell_n_mag = np.linalg.norm(wall_grid.normals[c]) # saves time by moving this here
+                        cell_n_i = cell_n_i/cell_n_mag
+                        cell_n_f = cell_n_f/cell_n_mag
 
-                            pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
-                            intersect = particles[p][posn_2] + pct_vect*self.dt*particles[p][vel]
+                        pct_vect = np.abs(cell_n_i)/np.abs(cell_n_i - cell_n_f)
+                        intersect = particles[p][posn_2] + pct_vect*self.dt*particles[p][vel]
 
-                            # TODO precalculate volume cell associativity with wall cells so the cell wall detection only needs to happen a few times.
-                            if in_element(wall_grid.points[c], cell_n, intersect):
-                                if np.random.rand(1) > self.alpha:
-                                    dm, particle_reflected = self.reflect_specular( particles[p], posn_1, posn_2, vel, m, cell_n, cell_n_i, cell_n_f)
-                                particles[p] = particle_reflected
-                                # TODO fix diffuse reflection function
-                                # else:
-                                #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
-                                #     # energy change
-                                #     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
-                                # pressure contribution from reflection
-                                pres_scalar = np.linalg.norm(dm[1:3]/self.dt/wall_grid.areas[c]) # not a very clevery way to get normal compoent
-                                pres[c].append(pres_scalar) 
-                                # axial pressure contribution from reflection
-                                axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
-                                axial_stress[c].append(axial_stress_scalar)
+                        # TODO precalculate volume cell associativity with wall cells so the cell wall detection only needs to happen a few times.
+                        if in_element(wall_grid.points[c], cell_n, intersect):
+                            if np.random.rand(1) > self.alpha:
+                                dm, particle_reflected = self.reflect_specular( particles[p], posn_1, posn_2, vel, m, cell_n, cell_n_i, cell_n_f)
+                            particles[p] = particle_reflected
+                            # TODO fix diffuse reflection function
+                            # else:
+                            #     dm, de = particle[p].reflect_diffuse(cell_n, self.dt, cell_n_i, cell_n_f, self.t_tw, c_m)
+                            #     # energy change
+                            #     ener[c] = ener[c] + de*self.m/self.dt/2*wp # convert to Joules
+                            # pressure contribution from reflection
+                            pres_scalar = np.linalg.norm(dm[1:3]/self.dt/wall_grid.areas[c]) # not a very clevery way to get normal compoent
+                            pres[c].append(pres_scalar) 
+                            # axial pressure contribution from reflection
+                            axial_stress_scalar = np.linalg.norm(dm[0]/self.dt/wall_grid.areas[c])
+                            axial_stress[c].append(axial_stress_scalar)
                 
                 # print(f"Collision Detect: {time.perf_counter() - collision_detect_time}")
 
@@ -240,11 +239,6 @@ class CASE_TPMC:
             print(f"Timestep Time: {time.perf_counter() - timestep_time}")
             i+=1 # add to timestep index, continue to next timestep
 
-
-    def readme_output(self):
-        """write out readme to output directory with info about the model
-        """
-        a = 1
 
     def create_particle(self, r, v):
         """append particle to current list
